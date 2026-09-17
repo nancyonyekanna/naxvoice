@@ -114,6 +114,18 @@ pub trait Platform: Send + Sync {
 
     /// Open the OS permission prompt or settings pane. No-op where unneeded.
     fn request_input_permission(&self) -> Result<()>;
+
+    /// Stops this app from being one the OS will bring to the front.
+    ///
+    /// Measured, because the obvious reasoning is wrong: building the overlay
+    /// window non-focusable is *not* enough. Showing it moved the frontmost
+    /// application from `com.google.Chrome` to `naxvoice`, because activation
+    /// happens at the application level — ordering any window front activates a
+    /// normal app whatever the window itself permits. That costs the paste
+    /// target, which is the one failure DESIGN.md says ends the interaction.
+    ///
+    /// Must be called on the main thread, before any window is shown.
+    fn hide_from_dock(&self) -> Result<()>;
 }
 
 pub fn current() -> Box<dyn Platform> {

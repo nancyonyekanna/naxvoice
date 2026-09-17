@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>naxvoice overlay</title>
+    <style>
+      /* Written for this window, not ported from design/wireframes.html. The
+         wireframe is the layout reference — dot, label, trailing meta — and the
+         pixel values there are explicitly not the spec. */
+      :root {
+        color-scheme: dark;
+        --ink: #f4f4f5;
+        --meta: #a1a1aa;
+        --ground: #18181b;
+      }
+
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        /* The window is opaque: transparency on macOS needs macos-private-api,
+           which is not worth a private-API opt-in for a rounded corner. */
+        background: transparent;
+      }
+
+      body {
+        display: flex;
+        align-items: center;
+        font: 12px/1 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+        /* The whole page is the widget, so nothing here should look clickable
+           or selectable — it is a readout, not a document. */
+        user-select: none;
+        cursor: default;
+      }
+
+      #hud {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: 100%;
+        box-sizing: border-box;
+        padding: 0 12px;
+        background: var(--ground);
+        border-radius: 10px;
+        color: var(--ink);
+      }
+
+      .dot {
+        flex: none;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--meta);
+      }
+
+      /* Recording is the one state worth pulsing: it is the only one where the
+         user is doing something and needs to know it is being heard. */
+      [data-state="listening"] .dot {
+        background: #f87171;
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      [data-state="polishing"] .dot {
+        background: #fbbf24;
+      }
+      [data-state="reading"] .dot {
+        background: #4ade80;
+      }
+
+      @keyframes pulse {
+        50% {
+          opacity: 0.35;
+        }
+      }
+
+      /* Someone who turns animation down should not get a pulsing dot. */
+      @media (prefers-reduced-motion: reduce) {
+        [data-state="listening"] .dot {
+          animation: none;
+        }
+      }
+
+      #label {
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      #meta {
+        margin-left: auto;
+        color: var(--meta);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      #stop {
+        margin-left: auto;
+        font: inherit;
+        color: var(--ink);
+        background: #3f3f46;
+        border: 0;
+        border-radius: 6px;
+        padding: 4px 10px;
+        cursor: pointer;
+      }
+      #stop:hover {
+        background: #52525b;
+      }
+      #stop[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="hud">
+      <span class="dot"></span>
+      <span id="label"></span>
+      <span id="meta"></span>
+      <button id="stop" hidden>Stop</button>
+    </div>
+
+    <script>
+      const hud = document.getElementById("hud");
+      const label = document.getElementById("label");
+      const meta = document.getElementById("meta");
+      const stop = document.getElementById("stop");
+
+      // Rust emits only on a state change. The clock ticks here, so a running
+      // timer costs no IPC — otherwise this would be ten messages a second for
+      // the whole of a dictation.
+      let state = null;
+      let startedAt = 0;
+      let chunks = 0;
+      let totalMs = 0;
+      let lastDrawn = "";
+
+      const clock = (ms) => {
+        const s = Math.max(0, Math.round(ms / 1000));
+        return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+      };
+
+      function render() {
+        hud.dataset.state = state ?? "";
+        stop.hidden = state !== "reading";
+        const since = Date.now() - startedAt;
+
+        if (state === "listening") {
+          label.textContent = `Listening · ${clock(since)}`;
+          // Sentence case, and the singular matters: "1 chunks sent" reads as
+          // a bug even when nothing is wrong.
+          meta.textContent = chunks
+            ? `${chunks} chunk${chunks === 1 ? "" : "s"} sent`
+            : "";
+        } else if (state === "polishing") {
+          // No estimate on purpose: DESIGN.md, an estimate that is wrong is
+          // worse than none at all.
+          label.textContent = "Polishing…";
+          meta.textContent = "";
+        } else if (state === "reading") {
+          const left = Math.max(0, totalMs - since);
+          label.textContent = totalMs
+            ? `Reading · ${clock(left)} left`
+            : "Reading";
+          meta.textContent = "";
+        }
+
+        // Reported back so Rust can log what was actually drawn. The widget
+        // spends most of its life parked off-screen, and screenshotting it
+        // needs a permission the machine may not have granted — this is the
+        // only evidence that the page loaded, the event arrived, and the right
+        // words came out of it.
+        //
+        // Only when that text changes, though. render() runs five times a
+        // second to move the clock, and reporting every tick would put back
+        // exactly the IPC traffic that ticking locally exists to avoid.
+        const drawn = JSON.stringify({
+          state,
+          label: label.textContent,
+          meta: meta.textContent,
+        });
+        if (drawn !== lastDrawn) {
+          lastDrawn = drawn;
+          window.__TAURI__?.event?.emit("overlay:rendered", JSON.parse(drawn));
+        }
+      }
+
+      setInterval(() => {
+        if (state) render();
+      }, 200);
+
+      stop.addEventListener("click", () => {
+        window.__TAURI__?.core?.invoke("overlay_stop");
+      });
+
+      // Escape only reaches a window that can take key events, and this one is
+      // built non-focusable so it can never steal the paste target. Kept for
+      // the day the overlay is focusable; see overlay.rs.
+      addEventListener("keydown", (e) => {
+        if (e.key === "Escape") window.__TAURI__?.core?.invoke("overlay_dismiss");
+      });
+
+      window.__TAURI__?.event?.listen("overlay:state", (event) => {
+        const p = event.payload ?? {};
+        state = p.state;
+        chunks = p.chunks ?? 0;
+        totalMs = p.total_ms ?? 0;
+        // Only restart the clock when the state itself changes, so a chunk
+        // count arriving mid-dictation does not reset the elapsed time.
+        if (p.restart) startedAt = Date.now();
+        render();
+      });
+    </script>
+  </body>
+</html>

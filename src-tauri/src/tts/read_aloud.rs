@@ -37,6 +37,7 @@ pub fn toggle<R: Runtime>(app: &AppHandle<R>) {
 
     if state.player.is_playing() {
         state.player.stop();
+        crate::overlay::hide(app);
         tracing::info!("stopped reading");
         return;
     }
@@ -115,6 +116,8 @@ async fn read_selection_aloud<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
         }
     });
 
+    crate::overlay::show(app, crate::overlay::Status::Reading);
+
     let started = std::time::Instant::now();
     let mut first_audio: Option<std::time::Duration> = None;
 
@@ -149,6 +152,7 @@ async fn read_selection_aloud<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
     }
 
     let _ = playback.await;
+    crate::overlay::hide(app);
     tracing::info!(ms = started.elapsed().as_millis(), "finished reading");
     Ok(())
 }

@@ -165,6 +165,18 @@ impl Platform for Win32 {
     fn request_input_permission(&self) -> Result<()> {
         Ok(())
     }
+
+    /// Does nothing yet, and that is an assumption rather than a finding.
+    ///
+    /// Windows has no activation policy to drop, and the overlay window is
+    /// created with `skip_taskbar`, so there is no obvious equivalent. But
+    /// whether showing a window here pulls the foreground away — the thing that
+    /// costs the paste target — has never been measured on Windows, and the
+    /// same assumption turned out to be wrong on macOS. Measure it before
+    /// trusting a paste on this platform.
+    fn hide_from_dock(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 fn read_clipboard() -> Result<Option<String>> {

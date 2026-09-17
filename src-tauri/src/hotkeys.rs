@@ -135,6 +135,7 @@ fn handle_edge<R: Runtime>(app: &AppHandle<R>, edge: KeyEdge) -> Result<()> {
                 .map_err(|_| anyhow::anyhow!("session ended before it began"))?;
 
             tracing::info!(id, "dictating");
+            crate::overlay::show(app, crate::overlay::Status::Listening);
             *state = State::Recording { id, latched: false, events: events_tx };
         }
 
@@ -147,6 +148,7 @@ fn handle_edge<R: Runtime>(app: &AppHandle<R>, edge: KeyEdge) -> Result<()> {
                 .map_err(|_| anyhow::anyhow!("session ended before the resume"))?;
 
             tracing::info!(id, "latched — keep talking, tap again to stop");
+            crate::overlay::show(app, crate::overlay::Status::Listening);
             *state = State::Recording { id, latched: true, events };
         }
 
@@ -270,6 +272,7 @@ async fn run_session<R: Runtime>(app: AppHandle<R>, mut events: UnboundedReceive
     while let Some(chunk) = chunk_rx.recv().await {
         let index = dispatched;
         dispatched += 1;
+        crate::overlay::chunks_sent(&app, dispatched);
 
         let Some(client) = client.clone() else { continue };
         let bias = bias.clone();
@@ -289,11 +292,16 @@ async fn run_session<R: Runtime>(app: AppHandle<R>, mut events: UnboundedReceive
 
     let released = pump.await.ok().flatten().unwrap_or_else(Instant::now);
 
+    // The mic is closed from here on, so whatever is left — the tail of the
+    // transcription, then the cleanup — is all the user is waiting on.
+    crate::overlay::show(&app, crate::overlay::Status::Polishing);
+
     if client.is_none() {
         tracing::error!(
             "{} is not set, so there is nothing to transcribe with",
             crate::config::API_KEY_ENV
         );
+        crate::overlay::hide(&app);
         return;
     }
 
@@ -325,6 +333,7 @@ async fn run_session<R: Runtime>(app: AppHandle<R>, mut events: UnboundedReceive
 
     if transcript.is_empty() {
         tracing::warn!("nothing was transcribed, so there is nothing to paste");
+        crate::overlay::hide(&app);
         return;
     }
 
@@ -332,9 +341,14 @@ async fn run_session<R: Runtime>(app: AppHandle<R>, mut events: UnboundedReceive
         Ok(text) => text,
         Err(e) => {
             tracing::error!(error = format!("{e:#}"), "dictation failed");
+            crate::overlay::hide(&app);
             return;
         }
     };
+
+    // Hidden before the paste, not after: the widget is on top of whatever the
+    // user is looking at, and it should be gone by the time the text lands.
+    crate::overlay::hide(&app);
 
     if let Err(e) = paste(&app, &text) {
         tracing::error!(error = format!("{e:#}"), "dictation failed");

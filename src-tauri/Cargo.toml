@@ -56,6 +56,9 @@ num2words = "1.2"
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-app-kit = { version = "0.3", default-features = false, features = [
     "std",
+    # Needed only to drop to Accessory activation, which is what stops the
+    # overlay activating the app and taking the paste target with it.
+    "NSApplication",
     "NSPasteboard",
     "NSWorkspace",
     "NSRunningApplication",

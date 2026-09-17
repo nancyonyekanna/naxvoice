@@ -12,9 +12,11 @@
 //! `has_input_permission` exists and why the dictation path checks it before
 //! blaming the network.
 //!
-//! None of the AppKit calls used here require a `MainThreadMarker`, which is
-//! what lets the paste run on the task that finished the transcription rather
-//! than having to hop back to the main thread.
+//! Every AppKit call here bar one is free of `MainThreadMarker`, which is what
+//! lets the paste run on the task that finished the transcription rather than
+//! having to hop back to the main thread. `hide_from_dock` is the exception:
+//! `NSApplication::sharedApplication` demands the marker, so it is called once
+//! from `setup`, which already runs on the main thread.
 
 use std::time::Duration;
 
@@ -23,11 +25,12 @@ use core_graphics::event::{CGEvent, CGEventFlags, CGEventTapLocation};
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 use block2::RcBlock;
 use objc2_app_kit::{
-    NSApplicationActivationOptions, NSApplicationActivationPolicy, NSEvent, NSEventMask,
-    NSEventModifierFlags, NSPasteboard, NSPasteboardTypeString, NSRunningApplication, NSWorkspace,
+    NSApplication, NSApplicationActivationOptions, NSApplicationActivationPolicy, NSEvent,
+    NSEventMask, NSEventModifierFlags, NSPasteboard, NSPasteboardTypeString, NSRunningApplication,
+    NSWorkspace,
 };
 use objc2_application_services::AXIsProcessTrusted;
-use objc2_foundation::NSString;
+use objc2_foundation::{MainThreadMarker, NSString};
 
 use super::{DictateKey, FocusTarget, KeyEdge, Platform};
 
@@ -290,6 +293,38 @@ impl Platform for Darwin {
             .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
             .status()
             .context("opening the Accessibility settings pane")?;
+        Ok(())
+    }
+
+    fn hide_from_dock(&self) -> Result<()> {
+        // `sharedApplication` wants proof we are on the main thread. Getting
+        // that wrong is a crash rather than a misbehaviour, so it is checked
+        // and reported instead of asserted.
+        let mtm = MainThreadMarker::new()
+            .context("hide_from_dock has to run on the main thread")?;
+
+        // Accessory also drops the Dock icon, which a tray app should not have
+        // had in the first place — see the note this replaces in main.rs.
+        let app = NSApplication::sharedApplication(mtm);
+
+        // Read before writing. Setting the policy it already has reports failure,
+        // which previously looked like the policy being refused when in fact it
+        // was already correct — an ambiguity that cost a measurement.
+        if app.activationPolicy() == NSApplicationActivationPolicy::Accessory {
+            tracing::debug!(accessory = true, "activation policy already accessory");
+            return Ok(());
+        }
+
+        if !app.setActivationPolicy(NSApplicationActivationPolicy::Accessory) {
+            bail!("macOS refused the accessory activation policy");
+        }
+
+        // Read back rather than trust the return value.
+        tracing::debug!(
+            accessory = app.activationPolicy() == NSApplicationActivationPolicy::Accessory,
+            "activation policy after setting it"
+        );
+
         Ok(())
     }
 }

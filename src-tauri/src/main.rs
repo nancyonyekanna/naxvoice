@@ -23,6 +23,7 @@ mod cleanup;
 #[allow(dead_code)]
 mod config;
 mod hotkeys;
+mod overlay;
 mod platform;
 #[allow(dead_code)]
 mod stt;
@@ -66,6 +67,12 @@ fn run() -> Result<()> {
         // Dictation watches a bare modifier and needs no plugin, but read-aloud
         // is a discrete press and registers an ordinary accelerator.
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        // The overlay's Stop button and Escape are the only things the frontend
+        // calls into Rust for; everything else is driven from this side.
+        .invoke_handler(tauri::generate_handler![
+            overlay::overlay_stop,
+            overlay::overlay_dismiss
+        ])
         .setup(move |app| {
             // Held in managed state so the shortcut handler, which only ever
             // gets an AppHandle, can reach it on both edges of the key.
@@ -75,7 +82,17 @@ fn run() -> Result<()> {
             );
             tracing::info!(dir = %recorder.output_dir().display(), "recordings directory");
             app.manage(recorder);
-            app.manage(Platforms(platform::current()));
+            // Before any window exists. A normal macOS app is activated by
+            // having a window ordered in front of everything else, which would
+            // take the paste target with it — measured, not assumed.
+            let platforms = Platforms(platform::current());
+            if let Err(e) = platforms.0.hide_from_dock() {
+                tracing::warn!(
+                    error = format!("{e:#}"),
+                    "could not drop to accessory activation, so the overlay may steal focus"
+                );
+            }
+            app.manage(platforms);
 
             // No key is a normal state until the dashboard can store one, so it
             // warns rather than failing: recording still works, and the failure
@@ -156,6 +173,17 @@ fn run() -> Result<()> {
             app.manage(config);
 
             build_tray(app.handle())?;
+
+            // Built now rather than on the first dictation so the page is
+            // already loaded and listening when it is first shown.
+            overlay::create(app.handle())?;
+
+            // Kept as a diagnostic: walks the widget through its three states
+            // and reports whether the frontmost application changed.
+            if std::env::var_os("NAXVOICE_OVERLAY_SELFTEST").is_some() {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move { overlay::self_test(&handle).await });
+            }
 
             // Read-aloud is a discrete press rather than hold-to-talk, so an
             // ordinary registered accelerator is the right shape for it — and
