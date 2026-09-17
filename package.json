@@ -1,0 +1,14 @@
+{
+  "name": "naxvoice",
+  "private": true,
+  "version": "0.1.0",
+  "description": "System-wide dictation and read-aloud for macOS and Windows",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

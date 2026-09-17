@@ -1,0 +1,90 @@
+[package]
+name = "naxvoice"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.77.2"
+description = "System-wide dictation and read-aloud"
+license = "MIT"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-global-shortcut = "2"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "multipart", "http2"] }
+serde = { version = "1", features = ["derive"] }
+# serde_yaml is published as 0.9.34+deprecated and unmaintained. serde_norway is
+# the maintained drop-in fork; the API is identical, so this is a one-line swap
+# if you ever want to move again. SETUP.md section 3 is updated to match.
+serde_norway = "0.9"
+anyhow = "1"
+regex = "1"
+async-trait = "0.1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+directories = "6"
+# 0.18, not the 0.15 SETUP.md used to name: the API moved (Device::name became
+# description, SampleRate is now a u32 alias), and pinning the old line would
+# have meant writing against a surface that no longer exists.
+cpal = "0.18"
+hound = "3.5"
+# Pinned to the release candidate on purpose. `ort = "2"` does not resolve at
+# all — every published version is a 2.0.0-rc, and cargo will not select a
+# pre-release for a plain "2" requirement. Its build script downloads ONNX
+# Runtime 1.28.0 for the host and links CoreML on macOS, so a first build needs
+# the network.
+ort = "=2.0.0-rc.13"
+
+# Platform bindings. The cfg lives in the manifest rather than in source, so
+# platform/ stays the only place with a #[cfg]. Every macOS crate below is
+# already in the tree via tauri, so declaring them directly costs no extra
+# compilation — only the narrow feature set each file actually needs.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+    "std",
+    "NSPasteboard",
+    "NSWorkspace",
+    "NSRunningApplication",
+    # Gates the two methods whose signatures mention libc::pid_t —
+    # processIdentifier and runningApplicationWithProcessIdentifier — which are
+    # how a paste target is captured and found again. It is in this crate's
+    # default set, so it is easy to miss when opting out of defaults.
+    "libc",
+    # The global event monitor that watches the dictation key. A bare modifier
+    # cannot be a registered hotkey at all — global-hotkey's key_to_scancode
+    # maps no modifier, so registration fails with "Unknown scancode" — so the
+    # key is observed rather than registered.
+    "NSEvent",
+    # addGlobalMonitorForEventsMatchingMask takes an Objective-C block.
+    "block2",
+] }
+block2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString"] }
+# AXIsProcessTrusted needs both of these features, not just one.
+objc2-application-services = { version = "0.3", default-features = false, features = [
+    "std",
+    "AXUIElement",
+    "HIServices",
+] }
+core-graphics = "0.25"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_System_Ole",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Threading",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+# Deliberately not here yet. Each arrives with the step that first calls it,
+# so the build stays fast and nothing compiles native toolchains for dead code:
+#   ort       step 5, Silero VAD behind audio::vad::SileroSession
+#   num2words step 6, the number helpers in tts::normalize
+#   thiserror first module that defines a library error type
+#   tauri-plugin-stronghold  step 8, when the dashboard can accept a key

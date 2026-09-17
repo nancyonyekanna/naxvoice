@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Merged into the generated Info.plist by tauri-build. macOS terminates an app
+  that opens an input stream without NSMicrophoneUsageDescription, so this is
+  what keeps the bundled build alive on the first dictation. Under `tauri dev`
+  the binary is unbundled and inherits the terminal's microphone grant instead,
+  which is why the prompt there names the terminal rather than naxvoice.
+-->
+<plist version="1.0">
+  <dict>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>naxvoice records your voice while you hold the dictation key, and transcribes it into text at your cursor.</string>
+  </dict>
+</plist>

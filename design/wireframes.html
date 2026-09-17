@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>naxvoice — dashboard wireframes</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --pane: #fafafa;
+    --line: #e4e4e4;
+    --line-strong: #cfcfcf;
+    --ink: #1a1a1a;
+    --ink-2: #666666;
+    --ink-3: #999999;
+    --sel: #f0f0f0;
+    --ok: #1a7f4b;
+    --warn: #96650a;
+    --bad: #b3261e;
+    --tag: #eef1f6;
+    --tag-ink: #2d4a7c;
+    --radius: 6px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161616; --pane: #1e1e1e; --line: #2e2e2e; --line-strong: #414141;
+      --ink: #ededed; --ink-2: #a0a0a0; --ink-3: #757575; --sel: #262626;
+      --ok: #4ec98a; --warn: #d9a441; --bad: #e5776d;
+      --tag: #21293a; --tag-ink: #9dbbe8;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 40px 24px 80px;
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    color: var(--ink); background: var(--bg);
+  }
+  .sheet { max-width: 940px; margin: 0 auto; }
+  .sheet > h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+  .sheet > .lede { color: var(--ink-2); margin: 0 0 40px; max-width: 62ch; }
+  .frame-label {
+    font-family: var(--mono); font-size: 12px; color: var(--ink-3);
+    margin: 0 0 8px;
+  }
+  .frame {
+    border: 1px solid var(--line-strong); border-radius: 10px;
+    overflow: hidden; margin-bottom: 40px; background: var(--bg);
+  }
+  .app { display: flex; min-height: 420px; }
+  .side {
+    width: 168px; flex: none; background: var(--pane);
+    border-right: 1px solid var(--line); padding: 14px 0;
+  }
+  .side .brand { font-weight: 600; padding: 0 16px 14px; }
+  .side a {
+    display: block; padding: 7px 16px; color: var(--ink-2);
+    text-decoration: none; font-size: 13px;
+  }
+  .side a.on { background: var(--sel); color: var(--ink); }
+  .pane { flex: 1; min-width: 0; padding: 18px 20px; }
+  .pane-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .pane-head h2 { font-size: 15px; font-weight: 600; margin: 0; }
+  .pill {
+    font-size: 12px; padding: 3px 10px; border-radius: 999px;
+    background: var(--tag); color: var(--tag-ink);
+  }
+  .tiles { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin-bottom: 16px; }
+  .tile { background: var(--pane); border-radius: var(--radius); padding: 12px; }
+  .tile .k { font-size: 12px; color: var(--ink-2); margin: 0; }
+  .tile .v { font-size: 22px; font-weight: 600; margin: 3px 0 0; }
+  .tile .s { font-size: 11px; color: var(--ink-3); margin: 1px 0 0; }
+  .rows { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: 13px;
+  }
+  .row:last-child { border-bottom: 0; }
+  .row .meta { color: var(--ink-2); font-size: 12px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 9px; }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+  .field { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .field > label { font-size: 13px; color: var(--ink-2); width: 122px; flex: none; }
+  input[type=text], input[type=password], select, textarea {
+    font: inherit; font-size: 13px; color: var(--ink);
+    background: var(--bg); border: 1px solid var(--line-strong);
+    border-radius: var(--radius); padding: 6px 8px; flex: 1; min-width: 0;
+  }
+  textarea { width: 100%; resize: vertical; }
+  input[type=range] { flex: 1; accent-color: var(--ink); }
+  .val { font-variant-numeric: tabular-nums; font-size: 13px; min-width: 54px; text-align: right; }
+  button {
+    font: inherit; font-size: 13px; padding: 6px 11px; color: var(--ink);
+    background: var(--bg); border: 1px solid var(--line-strong);
+    border-radius: var(--radius); cursor: pointer;
+  }
+  .divider { border-top: 1px solid var(--line); margin: 16px 0; padding-top: 16px; }
+  .sub { font-size: 13px; font-weight: 600; margin: 0 0 10px; }
+  .hint { font-size: 12px; color: var(--ink-3); margin: 8px 0 0; }
+  .two { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.25fr); gap: 12px; }
+  .listitem { padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  .listitem:last-child { border-bottom: 0; }
+  .listitem.on { background: var(--sel); }
+  .listitem .n { font-size: 13px; font-weight: 600; margin: 0; }
+  .listitem .m { font-size: 12px; color: var(--ink-2); margin: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .chip {
+    font-family: var(--mono); font-size: 12px; padding: 4px 9px;
+    border-radius: var(--radius); background: var(--tag); color: var(--tag-ink);
+  }
+  .checks { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; }
+  .checks label { display: flex; align-items: center; gap: 6px; }
+  .mono { font-family: var(--mono); }
+  .preview { background: var(--pane); border-radius: var(--radius); padding: 10px; margin-top: 10px; }
+  .preview .raw { font-family: var(--mono); font-size: 12px; color: var(--ink-2); margin: 0 0 5px; }
+  .preview .clean { font-family: var(--mono); font-size: 12px; margin: 0; }
+  .stage { background: var(--pane); padding: 34px 20px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .hud {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg); border: 1px solid var(--line-strong);
+    border-radius: var(--radius); padding: 9px 13px; font-size: 13px;
+  }
+  .note {
+    border-left: 2px solid var(--line-strong); padding: 2px 0 2px 14px;
+    color: var(--ink-2); margin: 0 0 40px; max-width: 70ch; font-size: 13px;
+  }
+  @media (max-width: 720px) {
+    .app { flex-direction: column; }
+    .side { width: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    .tiles, .two { grid-template-columns: 1fr; }
+    .field { flex-wrap: wrap; }
+    .field > label { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<h1>naxvoice dashboard wireframes</h1>
+<p class="lede">Static reference for the six dashboard screens and the floating overlay. Layout and hierarchy are the spec; exact pixel values are not. Every control maps to a key in <span class="mono">config.example.yaml</span>. See DESIGN.md for copy rules and rationale.</p>
+
+<p class="frame-label">01 · status</p>
+<div class="frame"><div class="app">
+  <nav class="side">
+    <p class="brand">naxvoice</p>
+    <a href="#" class="on">Status</a><a href="#">Models</a><a href="#">Profiles</a>
+    <a href="#">Dictionary</a><a href="#">Voice</a><a href="#">History</a><a href="#">Hotkeys</a>
+  </nav>
+  <div class="pane">
+    <div class="pane-head"><h2>Status</h2><span class="pill">Ready</span></div>
+    <div class="tiles">
+      <div class="tile"><p class="k">Round trip</p><p class="v">612ms</p><p class="s">7-day median</p></div>
+      <div class="tile"><p class="k">Words today</p><p class="v">4,180</p><p class="s">38 dictations</p></div>
+      <div class="tile"><p class="k">Spend</p><p class="v">$0.41</p><p class="s">this month</p></div>
+    </div>
+    <div class="rows">
+      <div class="row"><span><span class="dot ok"></span>Transcription · nova-3</span><span class="meta">cloud · 210ms</span></div>
+      <div class="row"><span><span class="dot ok"></span>Cleanup · haiku-4.5</span><span class="meta">cloud · 390ms</span></div>
+      <div class="row"><span><span class="dot ok"></span>Kokoro</span><span class="meta">local · loaded</span></div>
+      <div class="row"><span><span class="dot warn"></span>Chatterbox-Turbo</span><span class="meta">local · warming</span></div>
+    </div>
+  </div>
+</div></div>
+
+<p class="frame-label">02 · models and routing</p>
+<div class="frame"><div class="app">
+  <nav class="side">
+    <p class="brand">naxvoice</p>
+    <a href="#">Status</a><a href="#" class="on">Models</a><a href="#">Profiles</a>
+    <a href="#">Dictionary</a><a href="#">Voice</a><a href="#">History</a><a href="#">Hotkeys</a>
+  </nav>
+  <div class="pane">
+    <div class="pane-head"><h2>Models and routing</h2></div>
+    <div class="field">
+      <label for="k">OpenRouter key</label>
+      <input id="k" type="password" class="mono" value="sk-or-v1-8f2c9a" />
+      <span class="meta" style="color:var(--ok);font-size:12px;white-space:nowrap">$18.40 left</span>
+    </div>
+    <div class="field"><label for="m1">Transcription</label>
+      <select id="m1">
+        <option>deepgram/nova-3 · fastest</option>
+        <option>nvidia/parakeet-tdt-0.6b-v3</option>
+        <option>openai/whisper-large-v3 · most accurate</option>
+        <option>microsoft/mai-transcribe-2</option>
+      </select></div>
+    <div class="field"><label for="m2">Cleanup</label>
+      <select id="m2"><option>anthropic/claude-haiku-4.5</option><option>google/gemini-flash</option></select></div>
+    <div class="field"><label for="m3">If offline</label>
+      <select id="m3"><option>Paste raw transcript</option><option>Queue until reconnect</option></select></div>
+    <div class="divider">
+      <p class="sub">Chunking</p>
+      <div class="field"><label for="r1">Pause threshold</label>
+        <input id="r1" type="range" min="200" max="1200" step="50" value="450" /><span class="val">450ms</span></div>
+      <div class="field"><label for="r2">Chunk overlap</label>
+        <input id="r2" type="range" min="0" max="500" step="25" value="200" /><span class="val">200ms</span></div>
+      <div class="field"><label for="a1">Audio</label>
+        <select id="a1"><option>Opus 24kbps · recommended</option><option>WAV 16kHz</option></select></div>
+      <p class="hint">A lower threshold sends chunks sooner but risks cutting mid-thought.</p>
+    </div>
+  </div>
+</div></div>
+
+<p class="frame-label">03 · prompt profiles</p>
+<div class="frame"><div class="app">
+  <nav class="side">
+    <p class="brand">naxvoice</p>
+    <a href="#">Status</a><a href="#">Models</a><a href="#" class="on">Profiles</a>
+    <a href="#">Dictionary</a><a href="#">Voice</a><a href="#">History</a><a href="#">Hotkeys</a>
+  </nav>
+  <div class="pane">
+    <div class="pane-head"><h2>Prompt profiles</h2><button>Add profile</button></div>
+    <div class="two">
+      <div class="rows">
+        <div class="listitem on"><p class="n">VS Code</p><p class="m">Code.exe · Electron</p></div>
+        <div class="listitem"><p class="n">Gmail</p><p class="m">browser · mail.google.com</p></div>
+        <div class="listitem"><p class="n">WhatsApp</p><p class="m">desktop app</p></div>
+        <div class="listitem"><p class="n">Upwork</p><p class="m">browser · upwork.com</p></div>
+        <div class="listitem"><p class="n" style="color:var(--ink-2)">Default</p><p class="m">everything else</p></div>
+      </div>
+      <div style="border:1px solid var(--line);border-radius:var(--radius);padding:12px">
+        <p class="sub">VS Code</p>
+        <label for="t1" style="font-size:12px;color:var(--ink-2);display:block;margin-bottom:4px">Cleanup instruction</label>
+        <textarea id="t1" rows="4">Technical dictation. Never alter identifiers, file paths or package names. Format code as code. No pleasantries.</textarea>
+        <div class="field" style="margin-top:10px"><label for="pm" style="width:60px">Model</label>
+          <select id="pm"><option>inherit · haiku-4.5</option></select></div>
+        <div class="checks">
+          <label><input type="checkbox" checked /> Strip fillers</label>
+          <label><input type="checkbox" /> Auto-capitalize</label>
+        </div>
+        <div class="preview">
+          <p class="raw">um so add a route to web dot php calling naxcrow controller</p>
+          <p class="clean">Add a route to web.php calling NaxcrowController.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+<p class="frame-label">04 · dictionary</p>
+<div class="frame"><div class="app">
+  <nav class="side">
+    <p class="brand">naxvoice</p>
+    <a href="#">Status</a><a href="#">Models</a><a href="#">Profiles</a>
+    <a href="#" class="on">Dictionary</a><a href="#">Voice</a><a href="#">History</a><a href="#">Hotkeys</a>
+  </nav>
+  <div class="pane">
+    <div class="pane-head"><h2>Dictionary</h2></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <input type="text" placeholder="Flutterwave" aria-label="Term" />
+      <input type="text" placeholder="sounds like (optional)" aria-label="Sounds like" />
+      <button>Add</button>
+    </div>
+    <div class="rows">
+      <div class="row"><span class="mono">Naxcrow</span><span class="meta">nax crow, nacro · 41 corrections</span></div>
+      <div class="row"><span class="mono">Paystack</span><span class="meta">pay stack · 28 corrections</span></div>
+      <div class="row"><span class="mono">idempotency</span><span class="meta">idempotancy · 12 corrections</span></div>
+      <div class="row"><span class="mono">Redis</span><span class="meta">no corrections recorded</span></div>
+    </div>
+    <p class="hint">Sorted by correction count. The top 40 terms bias the transcription prompt; the rest are corrected by the cleanup model.</p>
+  </div>
+</div></div>
+
+<p class="frame-label">05 · voice and read-aloud</p>
+<div class="frame"><div class="app">
+  <nav class="side">
+    <p class="brand">naxvoice</p>
+    <a href="#">Status</a><a href="#">Models</a><a href="#">Profiles</a>
+    <a href="#">Dictionary</a><a href="#" class="on">Voice</a><a href="#">History</a><a href="#">Hotkeys</a>
+  </nav>
+  <div class="pane">
+    <div class="pane-head"><h2>Voice and read-aloud</h2></div>
+    <div class="field"><label for="v1">First sentence</label>
+      <select id="v1"><option>kokoro · af_heart</option></select><button>Play</button></div>
+    <div class="field"><label for="v2">Main voice</label>
+      <select id="v2"><option>chatterbox-turbo · my-clone-02</option></select><button>Play</button></div>
+    <div class="field"><label>Clone source</label>
+      <span style="flex:1;background:var(--pane);border-radius:var(--radius);padding:6px 10px;font-size:13px">sample-14s.wav</span>
+      <button>Re-record</button></div>
+    <div class="field"><label for="v3">Speed</label>
+      <input id="v3" type="range" min="0.5" max="2" step="0.1" value="1.2" /><span class="val">1.2x</span></div>
+    <div class="field"><label for="v4">Expression</label>
+      <input id="v4" type="range" min="0" max="1" step="0.05" value="0.45" /><span class="val">0.45</span></div>
+    <div class="divider">
+      <p class="sub">Pronunciation rules</p>
+      <div class="chips">
+        <span class="chip">API → ay pee eye</span>
+        <span class="chip">₦ → naira</span>
+        <span class="chip">Naxcrow → nax crow</span>
+      </div>
+      <div class="checks">
+        <label><input type="checkbox" checked /> Skip code blocks</label>
+        <label><input type="checkbox" checked /> Skip URLs</label>
+        <label><input type="checkbox" checked /> Expand numbers</label>
+      </div>
+      <p class="hint">Pick a Kokoro preset close in pitch and pace to the cloned voice, or the mid-passage handoff is audible.</p>
+    </div>
+  </div>
+</div></div>
+
+<p class="frame-label">06 · hotkeys</p>
+<div class="frame"><div class="app">
+  <nav class="side">
+    <p class="brand">naxvoice</p>
+    <a href="#">Status</a><a href="#">Models</a><a href="#">Profiles</a>
+    <a href="#">Dictionary</a><a href="#">Voice</a><a href="#">History</a><a href="#" class="on">Hotkeys</a>
+  </nav>
+  <div class="pane">
+    <div class="pane-head"><h2>Hotkeys</h2></div>
+    <div class="rows">
+      <div class="row"><span>Dictate</span><span class="mono meta">Cmd Shift Space</span></div>
+      <div class="row"><span>Dictate raw <span class="meta">skips cleanup</span></span><span class="mono meta">Cmd Shift Alt Space</span></div>
+      <div class="row"><span>Read selection aloud</span><span class="mono meta">Cmd Shift R</span></div>
+      <div class="row"><span>Stop</span><span class="mono meta">Escape</span></div>
+    </div>
+    <p class="hint">macOS needs Accessibility permission for global shortcuts and synthetic paste. Without it, shortcuts register but paste silently fails.</p>
+  </div>
+</div></div>
+
+<p class="frame-label">07 · overlay — floats near the cursor, not part of the window</p>
+<div class="frame"><div class="stage">
+  <div class="hud"><span class="dot bad"></span><span class="mono">listening · 0:07</span><span class="meta">2 chunks sent</span></div>
+  <div class="hud"><span class="dot warn"></span><span class="mono">polishing…</span></div>
+  <div class="hud"><span class="dot ok"></span><span class="mono">reading · 1:24 left</span><button>Stop</button></div>
+</div></div>
+<p class="note">Roughly 200×40, borderless, always on top, dismissable with Escape in every state. It must never take focus — if it does, the paste target is lost and the interaction fails. This is the surface the user lives in; polish it before the dashboard.</p>
+
+</div>
+</body>
+</html>

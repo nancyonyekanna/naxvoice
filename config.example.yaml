@@ -1,0 +1,109 @@
+# Copy to config.yaml. The OpenRouter key is NOT stored here.
+# It goes in the OS keychain via the dashboard.
+
+hotkeys:
+  # One key drives dictation. Hold it to speak; double-tap to latch so you can
+  # pause and keep going; tap once more to stop.
+  #
+  # This is a key name, not an accelerator, because a bare modifier cannot be
+  # registered as a global hotkey on macOS at all. It is watched instead of
+  # registered, which also means it keeps working as a normal Command key.
+  # Supported: RightCommand, LeftCommand.
+  dictate_key: "RightCommand"
+  latch_ms: 350                # a second tap within this window latches
+  read_aloud: "CmdOrCtrl+Shift+R"
+  stop: "Escape"
+
+transcription:
+  base_url: "https://openrouter.ai/api/v1"
+  model: "deepgram/nova-3"
+  # alternatives:
+  #   nvidia/parakeet-tdt-0.6b-v3   faster, EU-focused languages
+  #   openai/whisper-large-v3       slower, best on accented + technical speech
+  #   microsoft/mai-transcribe-2    60 languages, code switching
+  language: "en"
+  timeout_ms: 15000
+
+chunking:
+  pause_threshold_ms: 450      # silence that closes a chunk
+  overlap_ms: 200              # carried into next chunk so words aren't lost
+  min_chunk_ms: 600            # ignore segments shorter than this
+  max_chunk_ms: 25000          # force-close before the 60s upstream timeout
+
+audio:
+  codec: "opus"
+  bitrate: 24000
+  sample_rate: 16000
+  channels: 1
+
+cleanup:
+  enabled: true                # false pastes the raw transcript, unpolished
+  base_url: "https://openrouter.ai/api/v1"
+  model: "anthropic/claude-haiku-4.5"
+  speculative: true            # fire on last pause, re-fire if final chunk differs
+  max_tokens: 1024
+  offline_behavior: "paste_raw"   # paste_raw | queue
+
+tts:
+  first_sentence:
+    engine: "kokoro"
+    voice: "af_heart"
+  main:
+    engine: "chatterbox-turbo"
+    voice: "clone:samples/my-voice.wav"
+    exaggeration: 0.45
+  speed: 1.2
+  handoff_after_sentences: 1
+  skip_code_blocks: true
+  skip_urls: true
+  expand_numbers: true
+
+pronunciation:
+  - match: "API"
+    say: "ay pee eye"
+  - match: "₦"
+    say: "naira"
+  - match: "Naxcrow"
+    say: "nax crow"
+
+dictionary:
+  prompt_budget: 40            # top N terms biased into the transcription prompt
+  terms:
+    - term: "Naxcrow"
+      sounds_like: ["nax crow", "nacro"]
+    - term: "Paystack"
+      sounds_like: ["pay stack"]
+    - term: "Flutterwave"
+      sounds_like: ["flutter wave"]
+    - term: "idempotency"
+      sounds_like: ["idempotancy"]
+
+profiles:
+  default:
+    prompt: >
+      Remove filler words and false starts. Fix grammar and punctuation.
+      Keep the speaker's own voice and word choice. Do not add or invent content.
+
+  "Code|Code.exe|cursor":
+    prompt: >
+      Technical dictation. Never alter identifiers, file paths, package names or
+      case. Format code as code. No pleasantries, no restating the request.
+    strip_fillers: true
+    auto_capitalize: false
+
+  "mail.google.com|Mail|Outlook":
+    prompt: >
+      Professional email. Structure into short paragraphs. Turn spoken lists into
+      bullets. Keep it direct.
+
+  "WhatsApp|Telegram|Messages":
+    prompt: >
+      Casual message. Keep it short. No corporate tone, no sign-off.
+
+  "upwork.com":
+    prompt: >
+      Client-facing proposal voice. Direct, specific, no filler adjectives.
+      Never invent metrics, figures or past results.
+
+telemetry:
+  enabled: false
