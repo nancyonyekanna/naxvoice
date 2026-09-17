@@ -25,6 +25,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 use tauri::{AppHandle, Manager, Runtime};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use crate::audio::recorder::{chunk_to_wav, Chunk, Recorder};
@@ -66,6 +67,37 @@ impl Dictation {
     pub fn new(latch_window: Duration) -> Self {
         Self { state: Mutex::new(State::Idle), latch_window }
     }
+}
+
+/// Parses a Tauri accelerator such as `CmdOrCtrl+Shift+R`.
+///
+/// Read-aloud still uses one of these, unlike dictation: it is a discrete press
+/// rather than hold-to-talk, so it can be registered normally.
+pub fn parse_accelerator(accelerator: &str) -> Result<Shortcut> {
+    accelerator
+        .parse::<Shortcut>()
+        .map_err(|e| anyhow::anyhow!("{e}"))
+        .with_context(|| format!("parsing accelerator {accelerator:?}"))
+}
+
+/// Registers the read-aloud key. Pressing it again while speaking stops.
+pub fn register_read_aloud<R: Runtime>(
+    app: &AppHandle<R>,
+    shortcut: Shortcut,
+    accelerator: &str,
+) -> Result<()> {
+    let handle = app.clone();
+    app.global_shortcut()
+        .on_shortcut(shortcut, move |_, _, event| {
+            // Fire on press only: the release edge would toggle straight back.
+            if event.state() == ShortcutState::Pressed {
+                crate::tts::read_aloud::toggle(&handle);
+            }
+        })
+        .with_context(|| format!("registering read_aloud shortcut {accelerator:?}"))?;
+
+    tracing::info!(accelerator, "read-aloud shortcut registered");
+    Ok(())
 }
 
 /// Called for every press and release of the dictation key.

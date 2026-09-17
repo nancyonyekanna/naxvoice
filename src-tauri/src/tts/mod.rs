@@ -12,6 +12,7 @@
 pub mod chunk;
 pub mod kokoro;
 pub mod normalize;
+pub mod read_aloud;
 
 use anyhow::Result;
 use std::sync::Arc;

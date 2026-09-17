@@ -63,6 +63,9 @@ fn run() -> Result<()> {
     let config = Config::load()?;
 
     tauri::Builder::default()
+        // Dictation watches a bare modifier and needs no plugin, but read-aloud
+        // is a discrete press and registers an ordinary accelerator.
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(move |app| {
             // Held in managed state so the shortcut handler, which only ever
             // gets an AppHandle, can reach it on both edges of the key.
@@ -135,11 +138,31 @@ fn run() -> Result<()> {
 
             app.manage(PasteTarget(std::sync::Mutex::new(None)));
 
+            // Read-aloud. The weights are downloaded rather than committed, so
+            // the engine is constructed eagerly but loads lazily: a missing
+            // model should be an error when you press the key, naming the path,
+            // not a failure to launch.
+            let kokoro = std::sync::Arc::new(tts::kokoro::Kokoro::from_project_layout());
+            tracing::info!(model = %kokoro.model_path().display(), "read-aloud engine");
+            app.manage(tts::read_aloud::ReadAloud {
+                engine: kokoro,
+                player: std::sync::Arc::new(audio::player::Player::new()),
+            });
+
+            let read_aloud_key = hotkeys::parse_accelerator(&config.hotkeys.read_aloud)?;
+            let config_read_aloud = config.hotkeys.read_aloud.clone();
             let dictate_key = config.hotkeys.dictate()?;
             app.manage(hotkeys::Dictation::new(config.hotkeys.latch_window()));
             app.manage(config);
 
             build_tray(app.handle())?;
+
+            // Read-aloud is a discrete press rather than hold-to-talk, so an
+            // ordinary registered accelerator is the right shape for it — and
+            // pressing it again stops. `stop` in config.yaml stays unregistered
+            // on purpose: binding Escape globally would swallow it from every
+            // other application.
+            hotkeys::register_read_aloud(app.handle(), read_aloud_key, &config_read_aloud)?;
 
             // Watch the key rather than registering it: a bare modifier cannot
             // be a global hotkey, and watching leaves it working normally in
