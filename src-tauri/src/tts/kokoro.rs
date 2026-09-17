@@ -72,6 +72,51 @@ struct Loaded {
     voices: HashMap<String, Vec<f32>>,
 }
 
+/// Punctuation the model has tokens for, and acts on.
+///
+/// Measured: the same phonemes read flat take 1.73s, and 2.10s once these marks
+/// are present. The model really does pause; it is not merely tolerating them.
+const SPOKEN_MARKS: &[char] = &['.', ',', '!', '?', ';', ':', '—', '…'];
+
+/// Splits text into fragments, each with the mark that ended it.
+///
+/// espeak discards punctuation entirely — `"Wait, really?"` comes back as
+/// `wˈeɪtɹˈiəli`, which is both fused and flat. So the marks are carved out
+/// here, the fragments are phonemised separately, and the marks are put back
+/// afterwards. Splitting is free: a fragment phonemises to exactly the
+/// characters it contributed to the whole, verified across four sentences.
+fn segments(text: &str) -> Vec<(&str, Option<char>)> {
+    let chars: Vec<(usize, char)> = text.char_indices().collect();
+    let mut out = Vec::new();
+    let mut start = 0;
+
+    for (i, (idx, c)) in chars.iter().enumerate() {
+        if !SPOKEN_MARKS.contains(c) {
+            continue;
+        }
+
+        // A mark hugged by digits belongs to the number, not to the prosody:
+        // "3.14", "1,000" and "12:30" are each one spoken thing. Normalisation
+        // usually expands these first, but it does not always run.
+        let prev = chars[..i].last().map(|(_, p)| *p);
+        let next = chars.get(i + 1).map(|(_, n)| *n);
+        if matches!(c, '.' | ',' | ':')
+            && prev.is_some_and(|p| p.is_ascii_digit())
+            && next.is_some_and(|n| n.is_ascii_digit())
+        {
+            continue;
+        }
+
+        out.push((&text[start..*idx], Some(*c)));
+        start = idx + c.len_utf8();
+    }
+
+    if start < text.len() {
+        out.push((&text[start..], None));
+    }
+    out
+}
+
 impl Kokoro {
     /// `resources` holds espeak-ng-data and tokenizer.json and is committed.
     /// `models` holds the 88MB model and the voice packs, which are downloaded
@@ -110,9 +155,34 @@ impl Kokoro {
             .map_err(|_| anyhow!("espeak lock poisoned"))?;
 
         self.init_espeak()?;
-        let parts = espeak_rs::text_to_phonemes(text, "en-us", None)
-            .map_err(|e| anyhow!("espeak failed: {e}"))?;
-        Ok(parts.join(" "))
+
+        // One espeak call per fragment rather than one for the whole text, so
+        // the marks between them survive to the model. See `segments`.
+        let mut out = String::new();
+        for (fragment, mark) in segments(text) {
+            let fragment = fragment.trim();
+            if !fragment.is_empty() {
+                let parts = espeak_rs::text_to_phonemes(fragment, "en-us", None)
+                    .map_err(|e| anyhow!("espeak failed: {e}"))?;
+                let spoken = parts.join(" ");
+                let spoken = spoken.trim();
+                if !spoken.is_empty() {
+                    if !out.is_empty() {
+                        out.push(' ');
+                    }
+                    out.push_str(spoken);
+                }
+            }
+            // A mark with nothing before it would open the utterance on a
+            // pause, which the model renders as a stumble.
+            if let Some(mark) = mark {
+                if !out.is_empty() {
+                    out.push(mark);
+                }
+            }
+        }
+
+        Ok(out)
     }
 
     /// Callers must hold `ESPEAK_CALLS`.
@@ -178,11 +248,17 @@ impl Kokoro {
     }
 }
 
-#[async_trait::async_trait]
-impl Synthesizer for Kokoro {
-    async fn synthesize(&self, text: &str, cfg: &VoiceConfig) -> Result<AudioSegment> {
-        let phonemes = self.phonemes(text)?;
-
+impl Kokoro {
+    /// Synthesises already-phonemised input.
+    ///
+    /// Split out from `synthesize` so the phonemiser and the model can be
+    /// exercised separately — and because punctuation has to be re-inserted
+    /// into the phoneme string before it reaches the model.
+    pub async fn synthesize_phonemes(
+        &self,
+        phonemes: &str,
+        cfg: &VoiceConfig,
+    ) -> Result<AudioSegment> {
         let mut guard = self
             .loaded
             .lock()
@@ -230,6 +306,14 @@ impl Synthesizer for Kokoro {
         let (_, pcm) = value.try_extract_tensor::<f32>()?;
 
         Ok(AudioSegment { index: 0, pcm: pcm.to_vec(), sample_rate: SAMPLE_RATE })
+    }
+}
+
+#[async_trait::async_trait]
+impl Synthesizer for Kokoro {
+    async fn synthesize(&self, text: &str, cfg: &VoiceConfig) -> Result<AudioSegment> {
+        let phonemes = self.phonemes(text)?;
+        self.synthesize_phonemes(&phonemes, cfg).await
     }
 
     async fn warm(&self) -> Result<()> {
@@ -449,6 +533,157 @@ mod tests {
                 best.as_secs_f64() * 1000.0 / spoken.max(0.01) as f64
             );
         }
+    }
+
+    /// espeak throws punctuation away, so the marks have to be re-inserted or
+    /// the voice reads everything as one flat run-on. This is the regression
+    /// test for that: the user heard it as "doesn't follow punctuation".
+    #[test]
+    fn punctuation_survives_into_the_phonemes() {
+        let k = kokoro();
+        for (text, expected) in [
+            ("Hello. This is a test.", vec!['.']),
+            ("Wait, really? Yes!", vec![',', '?', '!']),
+            ("First item; second item: third.", vec![';', ':', '.']),
+        ] {
+            let phonemes = k.phonemes(text).expect("phonemisation");
+            for mark in expected {
+                assert!(
+                    phonemes.contains(mark),
+                    "{mark:?} was lost from {text:?}: got {phonemes:?}"
+                );
+            }
+        }
+    }
+
+    /// The old bug had a second symptom: with the punctuation gone, the words
+    /// either side of it fused into one. "Hello." + "This" became `həlˈoʊðɪs`.
+    #[test]
+    fn words_across_a_boundary_are_no_longer_fused() {
+        let k = kokoro();
+        let phonemes = k.phonemes("Hello. This is a test.").expect("phonemisation");
+        assert!(
+            !phonemes.contains("həlˈoʊðɪs"),
+            "the words are still fused: {phonemes:?}"
+        );
+    }
+
+    /// Splitting on every mark would read "3.14" as two numbers with a pause
+    /// between them. A mark between digits is part of the number.
+    #[test]
+    fn a_mark_between_digits_is_not_a_pause() {
+        for text in ["3.14", "1,000", "12:30"] {
+            let parts = segments(text);
+            assert_eq!(
+                parts.len(),
+                1,
+                "{text:?} should be one fragment, got {parts:?}"
+            );
+            assert_eq!(parts[0], (text, None));
+        }
+    }
+
+    #[test]
+    fn a_mark_between_words_is_a_boundary() {
+        assert_eq!(
+            segments("Wait, really?"),
+            vec![("Wait", Some(',')), (" really", Some('?'))]
+        );
+    }
+
+    /// Re-inserting a mark the model has no token for would be silently
+    /// dropped by the tokenizer, which would look like the fix not working.
+    #[test]
+    fn every_mark_we_re_insert_is_in_the_vocabulary() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/tokenizer.json");
+        let vocab = load_vocab(&path).unwrap();
+        let missing: Vec<char> = SPOKEN_MARKS
+            .iter()
+            .copied()
+            .filter(|c| !vocab.contains_key(c))
+            .collect();
+        assert!(missing.is_empty(), "not in the vocabulary: {missing:?}");
+    }
+
+    /// The whole chain, on real text: does what `phonemes` now emits actually
+    /// come out longer than the same words read flat?
+    ///
+    ///     cargo test --release end_to_end_punctuation -- --ignored --nocapture
+    #[tokio::test]
+    #[ignore]
+    async fn end_to_end_punctuation_lengthens_real_text() {
+        let k = kokoro();
+        if !k.model_path().exists() {
+            eprintln!("model absent, skipping");
+            return;
+        }
+        let cfg = VoiceConfig {
+            engine: super::super::Engine::Kokoro,
+            voice: "af_heart".into(),
+            speed: 1.0,
+            exaggeration: 0.0,
+        };
+        k.warm().await.expect("warm");
+
+        for text in [
+            "Wait, really? Yes!",
+            "Hello. This is a test.",
+            "First item; second item: third.",
+        ] {
+            let with = k.phonemes(text).expect("phonemes");
+            let without: String = with.chars().filter(|c| !SPOKEN_MARKS.contains(c)).collect();
+
+            let a = k.synthesize_phonemes(&without, &cfg).await.expect("flat");
+            let b = k.synthesize_phonemes(&with, &cfg).await.expect("punctuated");
+            let (a, b) = (
+                a.pcm.len() as f32 / a.sample_rate as f32,
+                b.pcm.len() as f32 / b.sample_rate as f32,
+            );
+
+            eprintln!("  {text:?}");
+            eprintln!("    -> {with}");
+            eprintln!("    flat {a:.2}s   punctuated {b:.2}s   ({:+.0}%)", (b / a - 1.0) * 100.0);
+            assert!(b > a, "punctuation did not lengthen {text:?}");
+        }
+    }
+
+    /// Does the model actually act on punctuation tokens, or merely accept them?
+    ///
+    /// The vocabulary containing `.` and `,` proves nothing about whether they
+    /// change the audio. Real pauses make the output measurably longer, so the
+    /// same phonemes with and without punctuation should differ in duration.
+    ///
+    ///     cargo test --release punctuation_changes -- --ignored --nocapture
+    #[tokio::test]
+    #[ignore]
+    async fn punctuation_changes_the_audio() {
+        let k = kokoro();
+        if !k.model_path().exists() {
+            eprintln!("model absent, skipping");
+            return;
+        }
+        let cfg = VoiceConfig {
+            engine: super::super::Engine::Kokoro,
+            voice: "af_heart".into(),
+            speed: 1.0,
+            exaggeration: 0.0,
+        };
+        k.warm().await.expect("warm");
+
+        // Phonemes taken straight from espeak, then the same with punctuation
+        // inserted where the original text had it.
+        let flat = "wˈeɪtɹˈiəlijˈɛs";
+        let punctuated = "wˈeɪt, ɹˈiəli? jˈɛs!";
+
+        for (label, phonemes) in [("without punctuation", flat), ("with punctuation", punctuated)] {
+            let seg = k
+                .synthesize_phonemes(phonemes, &cfg)
+                .await
+                .expect("synthesis");
+            let secs = seg.pcm.len() as f32 / seg.sample_rate as f32;
+            eprintln!("  {label:<22} {phonemes:<28} -> {secs:.2}s");
+        }
+        eprintln!("  (longer with punctuation means the model is pausing)");
     }
 
     /// Writes a sample out so it can actually be listened to. Numbers only tell
