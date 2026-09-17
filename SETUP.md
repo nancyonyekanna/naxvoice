@@ -45,6 +45,29 @@ macOS additionally needs Xcode command line tools:
 xcode-select --install
 ```
 
+Read-aloud also needs **cmake**, because the speech synthesis pulls in espeak-ng
+and compiles its vendored C source:
+
+```bash
+brew install cmake
+```
+
+Two things about that dependency are worth knowing before you hit them.
+
+Its default build runs a freshly compiled binary to generate data files, and
+that step crashes on Apple Silicon with `SIGTRAP` at `[31%] Compile
+intonations`. `Cargo.toml` therefore builds it with `default-features = false`,
+which skips that step — and because the data it would have produced is then
+missing, a trimmed copy is committed at `src-tauri/resources/espeak-ng-data`
+(1.3MB: the phoneme tables, the English dictionary, and `lang/gmw`). Do not
+delete it; espeak fails at runtime with `Error processing file 'phontab'`
+without it.
+
+The Kokoro weights are *not* committed. `src-tauri/assets/` needs
+`kokoro-v1.0.quantized.onnx` (88MB) and `af_heart.bin`, both from
+`onnx-community/Kokoro-82M-v1.0-ONNX` on Hugging Face. Read-aloud reports the
+missing path rather than failing obscurely if they are absent.
+
 Windows additionally needs the MSVC build tools and WebView2. Install
 "Desktop development with C++" from the Visual Studio Installer. WebView2 ships
 with Windows 11 and recent Windows 10.

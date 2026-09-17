@@ -36,6 +36,18 @@ hound = "3.5"
 # Runtime 1.28.0 for the host and links CoreML on macOS, so a first build needs
 # the network.
 ort = "=2.0.0-rc.13"
+# Grapheme-to-phoneme for Kokoro, which takes phonemes rather than text.
+#
+# default-features = false is not optional: the default enables
+# compile-espeak-intonations, a build step that runs a freshly compiled binary
+# and SIGTRAPs on arm64 macOS. With it off the crate builds, but the data files
+# that step would have produced are missing, so espeak-ng-data ships in
+# resources/ instead. Needs cmake to compile its vendored C source.
+espeak-rs = { version = "0.2", default-features = false }
+# Reads Kokoro's tokenizer.json. reqwest pulls this in transitively, but naming
+# it here is what makes `use serde_json` legal.
+serde_json = "1"
+num2words = "1.2"
 
 # Platform bindings. The cfg lives in the manifest rather than in source, so
 # platform/ stays the only place with a #[cfg]. Every macOS crate below is

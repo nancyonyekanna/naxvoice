@@ -129,14 +129,60 @@ fn expand_years(text: &str) -> String {
     .to_string()
 }
 
-fn spoken_pair(_two_digits: &str) -> String {
-    // TODO: number-to-words. Use the `num2words` crate rather than hand-rolling;
-    // the edge cases (teens, zero-padded pairs, "oh-five") are where this breaks.
-    unimplemented!("wire up num2words")
+/// Half of a year, spoken as people say it.
+///
+/// This receives halves — `expand_years` splits "2026" into "20" and "26" — so
+/// it must not use num2words' `year()` mode, which is built for whole years and
+/// would read "19" as a date rather than a number.
+///
+/// The zero-padded case is the one the original TODO warned about: "05" is
+/// "oh five", not "five", and certainly not "zero five".
+fn spoken_pair(two_digits: &str) -> String {
+    let n: i64 = match two_digits.trim().parse() {
+        Ok(n) => n,
+        // Unparseable input is left exactly as it was rather than guessed at.
+        Err(_) => return two_digits.to_string(),
+    };
+
+    if two_digits.len() == 2 && two_digits.starts_with('0') {
+        if n == 0 {
+            return "hundred".to_string();
+        }
+        return format!("oh {}", cardinal(n));
+    }
+    cardinal(n)
 }
 
-fn spoken_number(_digits: &str) -> String {
-    unimplemented!("wire up num2words")
+fn spoken_number(digits: &str) -> String {
+    match digits.trim().parse::<f64>() {
+        Ok(n) if n.fract() == 0.0 => cardinal(n as i64),
+        // Decimals keep their fractional part spoken digit by digit, which is
+        // how amounts are actually read: "one point five zero".
+        Ok(_) => {
+            let (whole, frac) = digits.split_once('.').unwrap_or((digits, ""));
+            let whole = whole.parse::<i64>().map(cardinal).unwrap_or_default();
+            let spoken: Vec<String> = frac
+                .chars()
+                .filter(|c| c.is_ascii_digit())
+                .map(|c| cardinal(c.to_digit(10).unwrap_or(0) as i64))
+                .collect();
+            if spoken.is_empty() {
+                whole
+            } else {
+                format!("{whole} point {}", spoken.join(" "))
+            }
+        }
+        Err(_) => digits.to_string(),
+    }
+}
+
+/// Falls back to the digits themselves rather than panicking: a number read
+/// wrongly is a nuisance, a crash mid-sentence ends the whole read-aloud.
+fn cardinal(n: i64) -> String {
+    num2words::Num2Words::new(n)
+        .cardinal()
+        .to_words()
+        .unwrap_or_else(|_| n.to_string())
 }
 
 fn collapse_whitespace(text: &str) -> String {
@@ -159,6 +205,35 @@ mod tests {
         // Sentence splitting downstream depends on this.
         assert_eq!(expand_abbreviations("see Dr. Ada"), "see Doctor Ada");
         assert!(!expand_abbreviations("e.g. this").contains('.'));
+    }
+
+    #[test]
+    fn years_are_spoken_in_pairs() {
+        // "twenty twenty-six", not "two thousand and twenty-six".
+        let out = expand_years("shipped in 2026");
+        assert!(out.contains("twenty"), "got {out:?}");
+        assert!(!out.contains("thousand"), "read as a whole number: {out:?}");
+    }
+
+    /// The case the original TODO singled out as where hand-rolling breaks.
+    #[test]
+    fn zero_padded_pairs_are_spoken_as_oh() {
+        assert_eq!(spoken_pair("05"), "oh five");
+        assert_eq!(spoken_pair("19"), "nineteen");
+        assert_eq!(spoken_pair("00"), "hundred");
+    }
+
+    #[test]
+    fn amounts_keep_their_decimals() {
+        assert_eq!(spoken_number("1200"), "one thousand two hundred");
+        assert!(spoken_number("1.50").contains("point"), "{}", spoken_number("1.50"));
+    }
+
+    /// Never panic mid-sentence: unreadable input passes through untouched.
+    #[test]
+    fn unparseable_numbers_pass_through_rather_than_crashing() {
+        assert_eq!(spoken_pair("xx"), "xx");
+        assert_eq!(spoken_number("not-a-number"), "not-a-number");
     }
 
     #[test]

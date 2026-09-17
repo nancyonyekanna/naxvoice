@@ -10,6 +10,7 @@
 //! That pairing is a setup-time decision, not something to fix at runtime.
 
 pub mod chunk;
+pub mod kokoro;
 pub mod normalize;
 
 use anyhow::Result;

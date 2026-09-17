@@ -4,5 +4,6 @@
 //! `recorder.rs` already emits the 16kHz mono i16 it expects, so step 5 can feed
 //! one into the other without either side changing.
 
+pub mod player;
 pub mod recorder;
 pub mod vad;
