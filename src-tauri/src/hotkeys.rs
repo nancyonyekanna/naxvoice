@@ -209,10 +209,14 @@ fn capture_paste_target<R: Runtime>(app: &AppHandle<R>) {
     let platform = app.state::<crate::Platforms>();
     match platform.0.capture_focus() {
         Ok(target) => {
-            if let Ok(mut slot) = app.state::<crate::PasteTarget>().0.lock() {
-                *slot = Some(target);
-            }
+            // Read here, not at the end: by the time there is a transcript the
+            // focused app is often something else entirely, which is the same
+            // reason the focus handle itself is captured now. History records
+            // where the text was headed, so it has to be this one.
             let name = platform.0.focused_app().unwrap_or_else(|_| "unknown".into());
+            if let Ok(mut slot) = app.state::<crate::PasteTarget>().0.lock() {
+                *slot = Some(crate::Target { focus: target, app: name.clone() });
+            }
             tracing::debug!(target = name, "will paste back into");
         }
         Err(e) => tracing::warn!(error = format!("{e:#}"), "could not capture a paste target"),
@@ -357,7 +361,22 @@ async fn run_session<R: Runtime>(app: AppHandle<R>, mut events: UnboundedReceive
 
     // The number CLAUDE.md's budget is written against: release to text on
     // screen. Anything over ~800ms median means something regressed.
-    tracing::info!(ms = released.elapsed().as_millis(), chars = text.len(), "release to pasted");
+    let round_trip = released.elapsed().as_millis();
+    tracing::info!(ms = round_trip, chars = text.len(), "release to pasted");
+
+    // Recorded after the paste, so nothing lands in history that never reached
+    // the screen. Off unless config says to keep it: this writes the dictation
+    // to disk in plain text.
+    if app.state::<Config>().history.keep {
+        let target = app
+            .state::<crate::PasteTarget>()
+            .0
+            .lock()
+            .ok()
+            .and_then(|slot| slot.clone());
+        let into = target.map(|t| t.app).unwrap_or_else(|| "unknown".into());
+        crate::history::append(&into, &transcript, &text, round_trip as u64, dispatched);
+    }
 }
 
 fn bias_terms<R: Runtime>(app: &AppHandle<R>) -> Vec<String> {
@@ -484,10 +503,12 @@ fn paste<R: Runtime>(app: &AppHandle<R>, text: &str) -> Result<()> {
         .0
         .lock()
         .ok()
-        .and_then(|slot| *slot);
+        // Cloned rather than copied: the target now carries the app's name
+        // alongside its focus handle, and a String is not Copy.
+        .and_then(|slot| slot.clone());
 
     match captured {
-        Some(target) => match platform.0.restore_focus(target) {
+        Some(target) => match platform.0.restore_focus(target.focus) {
             Ok(true) => {}
             Ok(false) => bail!(
                 "the app you dictated into can no longer receive text, so the \

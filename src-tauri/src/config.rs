@@ -53,6 +53,8 @@ pub struct Config {
     pub profiles: BTreeMap<String, Profile>,
     #[serde(default)]
     pub telemetry: Telemetry,
+    #[serde(default)]
+    pub history: History,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -246,6 +248,21 @@ impl Dictionary {
 pub struct Telemetry {
     #[serde(default)]
     pub enabled: bool,
+}
+
+/// Whether dictations are kept on disk so the History screen has something to
+/// show. Defaulted throughout, so a config.yaml written before this existed
+/// still loads — a key with no default is what broke startup once already.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct History {
+    #[serde(default = "default_true")]
+    pub keep: bool,
+}
+
+impl Default for History {
+    fn default() -> Self {
+        Self { keep: true }
+    }
 }
 
 impl Config {

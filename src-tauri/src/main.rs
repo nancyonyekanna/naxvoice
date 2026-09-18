@@ -23,6 +23,7 @@ mod cleanup;
 #[allow(dead_code)]
 mod config;
 mod dashboard;
+mod history;
 mod hotkeys;
 mod overlay;
 mod platform;
@@ -49,7 +50,17 @@ pub struct Cleanup(pub Option<std::sync::Arc<cleanup::CleanupClient>>);
 /// Where to paste, captured when the key goes down. Transcription takes seconds
 /// and focus moves in the meantime, so the target is decided at the start of a
 /// dictation rather than the end.
-pub struct PasteTarget(pub std::sync::Mutex<Option<platform::FocusTarget>>);
+///
+/// The app's identifier rides along with the focus handle rather than sitting
+/// in a second slot: they are captured at the same instant and describe the
+/// same thing, and two slots that must agree eventually disagree.
+#[derive(Clone)]
+pub struct Target {
+    pub focus: platform::FocusTarget,
+    pub app: String,
+}
+
+pub struct PasteTarget(pub std::sync::Mutex<Option<Target>>);
 
 fn main() {
     init_tracing();
@@ -80,7 +91,9 @@ fn run() -> Result<()> {
             dashboard::api_key_status,
             dashboard::set_api_key,
             dashboard::clear_api_key,
-            dashboard::preview_cleanup
+            dashboard::preview_cleanup,
+            dashboard::history_recent,
+            dashboard::clear_history
         ])
         .setup(move |app| {
             // Held in managed state so the shortcut handler, which only ever

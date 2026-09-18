@@ -113,3 +113,10 @@ profiles:
 
 telemetry:
   enabled: false
+
+history:
+  # Keeps each dictation on disk so the History screen has something to show,
+  # and so Status can report a round-trip median and a word count. This writes
+  # what you dictated, in plain text, to the app data directory. Set false and
+  # nothing is recorded.
+  keep: true

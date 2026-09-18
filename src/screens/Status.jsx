@@ -44,15 +44,15 @@ export default function Status() {
         <Tile
           k="Round trip"
           v={snapshot.round_trip_ms ? `${snapshot.round_trip_ms}ms` : "—"}
-          s={snapshot.round_trip_ms ? "7-day median" : "not recorded yet"}
+          s={snapshot.round_trip_ms ? "median, last 24 hours" : "nothing recorded yet"}
         />
         <Tile
-          k="Words today"
+          k="Words spoken"
           v={snapshot.words_today ?? "—"}
           s={
             snapshot.dictations_today != null
-              ? `${snapshot.dictations_today} dictations`
-              : "not recorded yet"
+              ? `${snapshot.dictations_today} dictations, last 24 hours`
+              : "nothing recorded yet"
           }
         />
         <Tile

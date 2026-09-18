@@ -51,7 +51,12 @@ Do not skip ahead. Each step must run before the next starts.
    cannot render faster than it plays and has nothing to hand off to. fp16,
    q4f16, int8 and CoreML were all measured; fp16 on CPU was the best at 60ms
    per token and still 2x too slow. Read-aloud is Kokoro only.
-8. The React dashboard, six screens per `DESIGN.md`.
+8. The React dashboard, seven screens per `DESIGN.md`: Status, Models, Profiles,
+   Dictionary, Voice, History and Hotkeys. Two of them had no usable spec —
+   History had none at all, and the Hotkeys wireframe still showed the
+   two-key design that the single hold-or-latch key replaced — so DESIGN.md
+   sections 06 and 07 were written afterwards to match what was built.
+   Settings write `config.yaml` and take effect on restart, not live.
 
 Steps 1 to 4 build a working but slow tool. Step 5 is where the latency win is.
 That ordering is deliberate: prove the pipeline before optimizing it.

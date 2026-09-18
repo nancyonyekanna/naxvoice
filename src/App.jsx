@@ -5,6 +5,7 @@ import Dictionary from "./screens/Dictionary.jsx";
 import Voice from "./screens/Voice.jsx";
 import Hotkeys from "./screens/Hotkeys.jsx";
 import Profiles from "./screens/Profiles.jsx";
+import History from "./screens/History.jsx";
 
 const BUILT = {
   status: Status,
@@ -12,6 +13,7 @@ const BUILT = {
   profiles: Profiles,
   dictionary: Dictionary,
   voice: Voice,
+  history: History,
   hotkeys: Hotkeys,
 };
 
@@ -25,7 +27,7 @@ const SCREENS = [
   { id: "profiles", label: "Profiles", spec: true },
   { id: "dictionary", label: "Dictionary", spec: true },
   { id: "voice", label: "Voice", spec: true },
-  { id: "history", label: "History", spec: false },
+  { id: "history", label: "History", spec: true },
   { id: "hotkeys", label: "Hotkeys", spec: true },
 ];
 

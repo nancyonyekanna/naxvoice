@@ -87,6 +87,17 @@ pub fn save_config(config: Config) -> Result<(), String> {
     config.save().map_err(|e| format!("{e:#}"))
 }
 
+/// The most recent dictations, newest first.
+#[tauri::command]
+pub fn history_recent(limit: usize) -> Vec<crate::history::Record> {
+    crate::history::recent(limit.clamp(1, 500))
+}
+
+#[tauri::command]
+pub fn clear_history() -> Result<(), String> {
+    crate::history::clear().map_err(|e| format!("{e:#}"))
+}
+
 /// Runs a sample transcript through a profile, without saving anything.
 ///
 /// DESIGN.md calls the preview "the only way to tell whether a prompt edit did
@@ -208,12 +219,22 @@ pub fn status_snapshot(app: AppHandle) -> Snapshot {
         "ready"
     };
 
+    // Real figures now, from the history store — but only if it is being kept.
+    // With recording off these stay absent and the screen shows dashes, which
+    // is the truth rather than zeroes that look like "you dictated nothing".
+    let stats = if app.state::<Config>().history.keep {
+        crate::history::stats()
+    } else {
+        crate::history::Stats::default()
+    };
+
     Snapshot {
         state,
-        // Not measured yet: there is no history store. See the module docs.
-        round_trip_ms: None,
-        words_today: None,
-        dictations_today: None,
+        round_trip_ms: stats.median_ms,
+        words_today: (stats.dictations > 0).then_some(stats.words),
+        dictations_today: (stats.dictations > 0).then_some(stats.dictations),
+        // Still absent: nothing reads OpenRouter's credit endpoint, and a
+        // plausible number here could not be told from a real one.
         spend: None,
         engines,
         warnings,

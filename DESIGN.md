@@ -1,6 +1,6 @@
 # Dashboard design
 
-Desktop window, roughly 900x700, left sidebar plus content pane. Six screens.
+Desktop window, roughly 900x700, left sidebar plus content pane. Seven screens.
 Plus one floating overlay that is not part of this window.
 
 The HTML wireframe at `design/wireframes.html` is the visual reference for everything below. Open it in a browser alongside this file.
@@ -121,7 +121,57 @@ CLAUDE.md step 7 for the measurements that ruled Chatterbox out.
 
 ---
 
-## 06 Overlay
+## 06 History
+
+This screen had no design. It was named in the sidebar and in README and
+described nowhere, so what follows is what was built rather than what was
+originally intended.
+
+**Keep dictations** — a checkbox, on by default. It writes what you dictate to
+disk in plain text, so it is stated plainly and can be turned off. Turning it
+off stops new records; it does not delete old ones.
+
+**List** — newest first: timestamp, the app the text went to, round trip in ms,
+and the chunk count in muted text, then the pasted result. Where cleanup changed
+the text, the raw transcript follows in monospace, so the two can be compared.
+
+**Delete everything recorded** — one button, no per-row delete. Reaching for
+this means wanting the record gone, not curated.
+
+The same store answers Status's round trip and word count. That is why it earns
+its place: without it three tiles on the landing screen are permanent dashes.
+
+Capped at the most recent thousand records. Unbounded history would make the
+status screen slower every day it ran.
+
+---
+
+## 07 Hotkeys
+
+The wireframe frame for this screen is out of date: it shows Cmd+Shift+Space and
+a separate "dictate raw" key, which is the design replaced by a single key you
+hold, or double-tap to latch. Build from the code.
+
+**Dictate** — a select, offering only Right Command and Left Command. Those are
+the only keycodes verified against a real table, and a wrong one produces a key
+that silently never fires, so the list is short on purpose and the screen says
+why.
+
+**Latch window** — a slider. How long after release a second tap still counts as
+resuming rather than starting again.
+
+**Read selection aloud** — an ordinary accelerator, editable as text.
+
+**Stop** — shown, but not bindable. Registering Escape globally would swallow it
+from every other application; pressing the read-aloud key again stops instead.
+
+Below these, the two macOS permissions, because a missing one is the likeliest
+reason the app appears to do nothing at all: Input Monitoring lets the dictation
+key fire, Accessibility lets the paste land. They are separate grants.
+
+---
+
+## 08 Overlay
 
 Not part of the dashboard window. A borderless always-on-top widget near the
 cursor, roughly 200x40. Three states:
