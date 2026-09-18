@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Status from "./screens/Status.jsx";
+import Models from "./screens/Models.jsx";
 
 // DESIGN.md's sidebar, in its order. Five of these are specified in DESIGN.md,
 // Hotkeys has a wireframe only, and History has neither — it appears in the
@@ -36,6 +37,8 @@ export default function App() {
       <div className="pane">
         {screen === "status" ? (
           <Status />
+        ) : screen === "models" ? (
+          <Models />
         ) : (
           <NotBuilt screen={SCREENS.find((s) => s.id === screen)} />
         )}

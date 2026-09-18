@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::audio::vad::ChunkPolicy;
 use crate::cleanup::{DictionaryTerm, Profile};
@@ -35,7 +35,7 @@ pub const CONFIG_PATH_ENV: &str = "NAXVOICE_CONFIG";
 /// The profile key that applies when no pattern matches the focused app.
 pub const DEFAULT_PROFILE_KEY: &str = "default";
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub hotkeys: Hotkeys,
     pub transcription: Transcription,
@@ -55,7 +55,7 @@ pub struct Config {
     pub telemetry: Telemetry,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Hotkeys {
     /// A key name rather than an accelerator: a bare modifier cannot be a
     /// registered global hotkey, so this key is watched instead.
@@ -81,7 +81,7 @@ impl Hotkeys {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transcription {
     pub base_url: String,
     pub model: String,
@@ -95,7 +95,7 @@ impl Transcription {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Chunking {
     pub pause_threshold_ms: u64,
     pub overlap_ms: u64,
@@ -115,7 +115,7 @@ impl Chunking {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Audio {
     pub codec: String,
     pub bitrate: u32,
@@ -123,7 +123,7 @@ pub struct Audio {
     pub channels: u16,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Cleanup {
     /// Turning this off pastes exactly what was heard. It replaced a second
     /// hotkey: one key is the whole interaction now, so the bypass lives here.
@@ -140,7 +140,7 @@ fn default_true() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OfflineBehavior {
     /// Paste the unpolished transcript rather than losing the dictation.
@@ -149,7 +149,7 @@ pub enum OfflineBehavior {
     Queue,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Tts {
     pub first_sentence: VoiceEntry,
     pub main: VoiceEntry,
@@ -160,7 +160,7 @@ pub struct Tts {
     pub expand_numbers: bool,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VoiceEntry {
     pub engine: String,
     pub voice: String,
@@ -201,7 +201,7 @@ fn parse_engine(name: &str) -> Result<Engine> {
 /// YAML spells this `match`, which is a Rust keyword, and
 /// `tts::normalize::PronunciationRule` is not itself `Deserialize` — so this
 /// mirrors it for serde and converts.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PronunciationEntry {
     #[serde(rename = "match")]
     pub matches: String,
@@ -214,7 +214,7 @@ impl From<&PronunciationEntry> for PronunciationRule {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Dictionary {
     /// Top N terms biased into the transcription prompt. The rest are left to the
     /// cleanup model.
@@ -223,7 +223,7 @@ pub struct Dictionary {
     pub terms: Vec<DictionaryEntry>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DictionaryEntry {
     pub term: String,
     #[serde(default)]
@@ -242,7 +242,7 @@ impl Dictionary {
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Telemetry {
     #[serde(default)]
     pub enabled: bool,
@@ -272,6 +272,43 @@ impl Config {
             profile.pattern = pattern.clone();
         }
         Ok(config)
+    }
+
+    /// Writes the config back to wherever `path` resolves.
+    ///
+    /// **Comments do not survive.** serde emits data, not formatting, and this
+    /// file is about a quarter comments and blank lines. That is a deliberate
+    /// choice rather than an oversight: `config.example.yaml` stays committed
+    /// and fully annotated as the reference, so the explanations are never
+    /// lost, only not duplicated into the live file.
+    pub fn save(&self) -> Result<()> {
+        self.save_to(&Self::path()?)
+    }
+
+    pub fn save_to(&self, path: &Path) -> Result<()> {
+        let yaml = serde_norway::to_string(self).context("serialising the config")?;
+
+        let dir = path.parent().context("the config path has no parent directory")?;
+        std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+
+        // Write beside the target and rename, so an interrupted save leaves the
+        // previous config intact instead of a truncated one. The temporary file
+        // shares a directory with the target, so the rename cannot cross a
+        // filesystem boundary and degrade into a copy.
+        let temp = path.with_extension("yaml.saving");
+        std::fs::write(&temp, yaml.as_bytes())
+            .with_context(|| format!("writing {}", temp.display()))?;
+        std::fs::rename(&temp, path)
+            .with_context(|| format!("replacing {}", path.display()))?;
+
+        tracing::info!(path = %path.display(), "config saved");
+        Ok(())
+    }
+
+    /// Serialises without writing. Split out so the round trip can be tested
+    /// without touching the filesystem.
+    pub fn to_yaml(&self) -> Result<String> {
+        serde_norway::to_string(self).context("serialising the config")
     }
 
     /// Where `config.yaml` lives, in order of precedence:
@@ -483,6 +520,50 @@ mod tests {
     #[test]
     fn an_unknown_engine_is_an_error_not_a_default() {
         assert!(parse_engine("piper").is_err());
+    }
+
+    /// The highest-consequence path the dashboard opens up: if saving produces
+    /// a file the app cannot read back, startup breaks on the next launch —
+    /// which is exactly what happened when a config key gained no default.
+    #[test]
+    fn a_saved_config_can_be_loaded_again() {
+        let original = example();
+        let yaml = original.to_yaml().expect("serialising");
+        let reloaded = Config::from_yaml(&yaml).expect("reparsing what we just wrote");
+
+        assert_eq!(reloaded.hotkeys.dictate_key, original.hotkeys.dictate_key);
+        assert_eq!(reloaded.hotkeys.latch_ms, original.hotkeys.latch_ms);
+        assert_eq!(reloaded.transcription.model, original.transcription.model);
+        assert_eq!(reloaded.cleanup.model, original.cleanup.model);
+        assert_eq!(
+            reloaded.chunking.pause_threshold_ms,
+            original.chunking.pause_threshold_ms
+        );
+        assert_eq!(reloaded.dictionary.terms.len(), original.dictionary.terms.len());
+
+        // Profiles are the likeliest thing to lose: the pattern is the YAML map
+        // key and the struct field is `#[serde(skip)]`, so it is written by the
+        // key and refilled on parse rather than round-tripping directly.
+        assert_eq!(reloaded.profiles.len(), original.profiles.len());
+        for (key, profile) in &reloaded.profiles {
+            assert_eq!(
+                &profile.pattern, key,
+                "the pattern was not refilled from the map key"
+            );
+        }
+    }
+
+    /// The pronunciation entry spells its field `match` in YAML, which is a
+    /// Rust keyword. A save that emitted `matches` instead would parse as an
+    /// empty rule set on the next launch, silently dropping every rule.
+    #[test]
+    fn saving_keeps_the_yaml_spelling_of_match() {
+        let yaml = example().to_yaml().expect("serialising");
+        assert!(
+            yaml.contains("match:"),
+            "expected the YAML key `match:`, got:\n{yaml}"
+        );
+        assert!(!yaml.contains("matches:"), "the Rust field name leaked into the file");
     }
 
     #[test]

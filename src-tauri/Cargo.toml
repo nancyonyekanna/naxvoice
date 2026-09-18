@@ -84,8 +84,15 @@ objc2-application-services = { version = "0.3", default-features = false, featur
     "HIServices",
 ] }
 core-graphics = "0.25"
+# The OpenRouter key, in the login keychain. The backend feature is not
+# optional in practice: keyring has no default feature, and with none enabled it
+# quietly substitutes an in-memory mock store, so writes succeed, reads succeed,
+# and the key is gone on relaunch. That failure is invisible in development.
+keyring = { version = "3.6", features = ["apple-native"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
+# Same reasoning as the macOS entry above: without this the store is a mock.
+keyring = { version = "3.6", features = ["windows-native"] }
 windows = { version = "0.62", features = [
     "Win32_Foundation",
     "Win32_System_DataExchange",
@@ -97,9 +104,10 @@ windows = { version = "0.62", features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 
-# Deliberately not here yet. Each arrives with the step that first calls it,
-# so the build stays fast and nothing compiles native toolchains for dead code:
-#   ort       step 5, Silero VAD behind audio::vad::SileroSession
-#   num2words step 6, the number helpers in tts::normalize
-#   thiserror first module that defines a library error type
-#   tauri-plugin-stronghold  step 8, when the dashboard can accept a key
+# Deliberately not here. Each would arrive with the step that first calls it:
+#   thiserror  first module that defines a library error type
+#
+# tauri-plugin-stronghold was the plan for the key and is not used. It is not
+# the OS keychain: it is an encrypted vault file needing a password, which a
+# tray app with no login screen has nowhere good to keep. `keyring` above is
+# the actual Keychain and Credential Manager. See the target sections.

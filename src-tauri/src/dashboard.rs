@@ -15,6 +15,9 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindowBuilder};
 
+use crate::config::Config;
+use crate::secrets;
+
 pub const LABEL: &str = "main";
 
 /// Roughly 900x700, per DESIGN.md.
@@ -62,6 +65,44 @@ pub fn open<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
     // grants osascript no assistive access.
     tracing::info!(w = WIDTH, h = HEIGHT, "settings window open");
     Ok(())
+}
+
+/// The config as loaded at startup.
+///
+/// This is the in-memory copy, not a re-read of the file, so it matches what
+/// the app is actually running with rather than what is currently on disk.
+#[tauri::command]
+pub fn get_config(app: AppHandle) -> Config {
+    app.state::<Config>().inner().clone()
+}
+
+/// Writes the config to disk.
+///
+/// It does **not** change the running app: `Config` is managed state built once
+/// during setup, and swapping it under the recorder, the shortcut watcher and
+/// the synthesiser mid-flight would be a much larger change than writing a
+/// file. The dashboard says so rather than implying a live reload happened.
+#[tauri::command]
+pub fn save_config(config: Config) -> Result<(), String> {
+    config.save().map_err(|e| format!("{e:#}"))
+}
+
+/// Whether a key is installed, and where it came from. Never the key itself.
+#[tauri::command]
+pub fn api_key_status() -> secrets::KeyStatus {
+    secrets::status()
+}
+
+#[tauri::command]
+pub fn set_api_key(key: String) -> Result<secrets::KeyStatus, String> {
+    secrets::set(&key).map_err(|e| format!("{e:#}"))?;
+    Ok(secrets::status())
+}
+
+#[tauri::command]
+pub fn clear_api_key() -> Result<secrets::KeyStatus, String> {
+    secrets::clear().map_err(|e| format!("{e:#}"))?;
+    Ok(secrets::status())
 }
 
 #[tauri::command]

@@ -26,6 +26,7 @@ mod dashboard;
 mod hotkeys;
 mod overlay;
 mod platform;
+mod secrets;
 #[allow(dead_code)]
 mod stt;
 #[allow(dead_code)]
@@ -73,7 +74,12 @@ fn run() -> Result<()> {
         .invoke_handler(tauri::generate_handler![
             overlay::overlay_stop,
             overlay::overlay_dismiss,
-            dashboard::status_snapshot
+            dashboard::status_snapshot,
+            dashboard::get_config,
+            dashboard::save_config,
+            dashboard::api_key_status,
+            dashboard::set_api_key,
+            dashboard::clear_api_key
         ])
         .setup(move |app| {
             // Held in managed state so the shortcut handler, which only ever
@@ -99,7 +105,7 @@ fn run() -> Result<()> {
             // No key is a normal state until the dashboard can store one, so it
             // warns rather than failing: recording still works, and the failure
             // then names the missing key instead of surfacing as a 401.
-            let client = match config::dev_api_key() {
+            let client = match secrets::resolve() {
                 Some(key) => {
                     tracing::info!(model = %config.transcription.model, "transcription enabled");
                     let client = std::sync::Arc::new(stt::openrouter::SttClient::new(
@@ -133,7 +139,7 @@ fn run() -> Result<()> {
             // Same key, separate client: transcription and cleanup are different
             // endpoints with different timeouts, and pooling them separately
             // keeps a slow cleanup from blocking the next transcription.
-            let polisher = match config::dev_api_key() {
+            let polisher = match secrets::resolve() {
                 Some(key) => {
                     tracing::info!(model = %config.cleanup.model, "cleanup enabled");
                     Some(std::sync::Arc::new(cleanup::CleanupClient::new(

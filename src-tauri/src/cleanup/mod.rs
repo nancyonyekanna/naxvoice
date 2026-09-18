@@ -11,7 +11,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Profile {
     /// Pipe-separated patterns matched against the focused app's identifier.
     #[serde(skip)]
@@ -57,17 +57,17 @@ struct Message<'a> {
     content: &'a str,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct ChatResponse {
     choices: Vec<Choice>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct Choice {
     message: ResponseMessage,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct ResponseMessage {
     content: String,
 }

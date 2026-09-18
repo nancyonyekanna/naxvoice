@@ -138,8 +138,13 @@ key your file never mentions. Replace the `hotkeys` block with the one in
 `dictate_raw`) and add `enabled: true` under `cleanup`.
 
 Do not put your OpenRouter key in this file. It is gitignored either way, but the
-key belongs in the OS keychain via the dashboard once that screen exists. Until
-then, read it from an environment variable in dev.
+key belongs in the OS keychain: open the tray menu, choose Settings, and save it
+on the Models screen. That writes to the macOS Keychain or the Windows Credential
+Manager, never to disk in the project.
+
+`NAXVOICE_OPENROUTER_KEY`, in the environment or in a `.env` beside
+`config.yaml`, still works and is the quickest way to get going before you have
+saved a key. A saved key takes precedence over both.
 
 ## 5. Verify the logic before fighting the build
 
