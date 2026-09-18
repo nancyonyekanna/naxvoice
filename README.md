@@ -23,9 +23,17 @@ change sentence structure, the polished text is already waiting.
 cheap. Read-aloud is long and repetitive, so local synthesis means no per-character
 cost, no waiting on megabytes of audio, and first audio in ~200ms.
 
-**Two TTS engines.** Kokoro (82M) speaks the first sentence almost instantly.
-Chatterbox-Turbo (0.5B) renders the rest behind it with much better voice quality
-and supports cloning from a short sample. You hear one continuous voice.
+**One TTS engine.** Kokoro (82M) runs locally and starts speaking after the
+first clause.
+
+This was meant to be two. The plan was Kokoro for the first sentence with
+Chatterbox-Turbo rendering the rest behind it, for better quality and voice
+cloning. Measured on an M-series Mac, Chatterbox-Turbo needs about 2.1 seconds
+of compute per spoken second — 60ms per token at 25 tokens per second of audio,
+plus 644ms per spoken second in the decoder. A voice that renders slower than it
+speaks cannot hand off to anything. Every precision was tried (fp16 60ms/token,
+q4f16 65ms, int8 798ms) and CoreML was worse than CPU at 105ms. Revisit only
+with a GPU.
 
 ## Layout
 
@@ -46,7 +54,9 @@ src-tauri/            Rust core
     cleanup/
       mod.rs          Per-app profile lookup, OpenRouter chat call
     tts/
-      mod.rs          Engine manager, Kokoro/Chatterbox handoff
+      mod.rs          Engine manager (Kokoro only; see Two TTS engines)
+      kokoro.rs       ONNX synthesis, espeak phonemes, punctuation prosody
+      read_aloud.rs   Selection to speech, stop on second press
       normalize.rs    Text normalization before synthesis
       chunk.rs        Prosody-aware sentence splitting
     platform/
@@ -74,8 +84,10 @@ npm run tauri dev
 Add your OpenRouter key in the dashboard, not in `config.yaml`. It goes to the OS
 keychain. `config.yaml` is gitignored regardless.
 
-Local TTS models download on first use into the app data directory. Kokoro is
-about 300MB, Chatterbox-Turbo about 1GB.
+The Kokoro weights are not committed and are not downloaded automatically:
+put `kokoro-v1.0.quantized.onnx` (88MB) and `af_heart.bin` in
+`src-tauri/assets/` yourself. SETUP.md says where to get them. Read-aloud
+reports the missing path rather than failing obscurely if they are absent.
 
 ## Build order
 
@@ -87,7 +99,7 @@ you'll have something usable after step 3.
 3. Cleanup pass with one global prompt.
 4. Rolling chunks and VAD. This is where the latency win comes from.
 5. Read-aloud with Kokoro only.
-6. Chatterbox handoff, normalizer, prosody chunking.
+6. Normalizer and prosody chunking.
 7. Dashboard.
 
 Steps 1 to 3 are a batch pipeline and step 4 replaces it. That's deliberate. Get

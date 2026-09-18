@@ -471,8 +471,12 @@ mod tests {
         let first = tts.first_voice().unwrap();
         let main = tts.main_voice().unwrap();
         assert_eq!(first.engine, Engine::Kokoro);
-        assert_eq!(main.engine, Engine::ChatterboxTurbo);
-        // A speed difference across the handoff is as audible as a pitch one.
+        // Both are Kokoro now. The second engine was measured at ~2.1s of
+        // compute per spoken second and dropped, so the example no longer
+        // configures one; see CLAUDE.md step 7.
+        assert_eq!(main.engine, Engine::Kokoro);
+        // Still worth pinning: both voices read `speed` from the same key, and
+        // a silent divergence there would be audible.
         assert_eq!(first.speed, main.speed);
     }
 

@@ -38,7 +38,8 @@ Landing screen. Answers "is it working and what is it costing me."
 - Transcription · model name — cloud, last latency
 - Cleanup · model name — cloud, last latency
 - Kokoro — local, loaded / loading
-- Chatterbox-Turbo — local, loaded / warming
+(No second engine. Chatterbox-Turbo was measured at ~2.1s of compute per spoken
+second and dropped; see CLAUDE.md step 7.)
 
 Dot colours: green ready, amber warming, red failed. Never rely on colour alone;
 the state text carries the same information.
@@ -107,14 +108,16 @@ by the cleanup model.
 - Main voice — engine and voice select, with a play button
 - Clone source — a file row showing the current sample with a Re-record button
 - Speed — slider 0.5-2.0, default 1.2
-- Expression — slider 0-1, default 0.45, Chatterbox only
+- Expression — not shown. It was a Chatterbox-only control, and Chatterbox is
+  not used; Kokoro ignores the setting.
 
 **Pronunciation rules**, below a divider. Rules render as removable chips in
 monospace, `from → to`. Three checkboxes: skip code blocks, skip URLs,
 expand numbers.
 
-Pick the Kokoro preset to sit close in pitch and pace to the cloned Chatterbox
-voice. If they are far apart the handoff mid-passage is audible.
+There is no handoff to tune: read-aloud uses one voice throughout. The clone
+source row is dead until an engine that can clone is fast enough to use — see
+CLAUDE.md step 7 for the measurements that ruled Chatterbox out.
 
 ---
 

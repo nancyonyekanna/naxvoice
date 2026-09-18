@@ -45,7 +45,12 @@ Do not skip ahead. Each step must run before the next starts.
 5. Replace batch with rolling chunks: wire `vad.rs` to `ort`, dispatch chunks on
    pause, reassemble with `stitch.rs`. **Delete the batch path — do not keep both.**
 6. Read-aloud with Kokoro only. Selection capture, normalize, chunk, play.
-7. Chatterbox-Turbo and the two-engine handoff in `tts/mod.rs`.
+7. ~~Chatterbox-Turbo and the two-engine handoff in `tts/mod.rs`.~~ Abandoned
+   after measurement: Chatterbox-Turbo costs ~2.1s of compute per spoken second
+   on Apple silicon (1503ms in the language model, 644ms in the decoder), so it
+   cannot render faster than it plays and has nothing to hand off to. fp16,
+   q4f16, int8 and CoreML were all measured; fp16 on CPU was the best at 60ms
+   per token and still 2x too slow. Read-aloud is Kokoro only.
 8. The React dashboard, six screens per `DESIGN.md`.
 
 Steps 1 to 4 build a working but slow tool. Step 5 is where the latency win is.

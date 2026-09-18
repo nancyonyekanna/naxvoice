@@ -48,11 +48,17 @@ tts:
   first_sentence:
     engine: "kokoro"
     voice: "af_heart"
+  # Kokoro is the only implemented engine. "chatterbox-turbo" still parses, but
+  # nothing implements it: measured at ~2.1s of compute per spoken second, which
+  # is slower than the speech it produces. See CLAUDE.md step 7.
   main:
-    engine: "chatterbox-turbo"
-    voice: "clone:samples/my-voice.wav"
+    engine: "kokoro"
+    voice: "af_heart"
     exaggeration: 0.45
   speed: 1.2
+  # Vestigial: there is one engine, so there is no handoff to schedule. The key
+  # is kept because removing it would break existing config.yaml files, which
+  # have no default for it.
   handoff_after_sentences: 1
   skip_code_blocks: true
   skip_urls: true

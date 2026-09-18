@@ -1,13 +1,21 @@
-//! Speech synthesis. Two engines, one perceived voice.
+//! Speech synthesis. One engine, because the second one was too slow.
 //!
-//! Chatterbox-Turbo is autoregressive, so a long passage has real lag before the
-//! first sample exists. Kokoro is tiny and near-instant but less expressive.
-//! We speak sentence one with Kokoro while Chatterbox renders the rest behind it,
-//! then hand over. The listener hears continuous speech starting in ~200ms.
+//! The design was two: Kokoro speaks sentence one almost instantly while
+//! Chatterbox-Turbo renders the rest behind it with better quality and voice
+//! cloning, then hands over. It does not work, and the reason is arithmetic
+//! rather than engineering. Measured on Apple silicon, Chatterbox-Turbo costs
+//! about 2.1 seconds of compute per spoken second — 60ms per token at 25 tokens
+//! per second of audio, plus 644ms per spoken second in its decoder. An engine
+//! that renders slower than it speaks can never catch up to playback, so there
+//! is nothing for the first sentence to hand off to.
 //!
-//! The handoff is audible if the two voices are far apart in pitch or pace, so
-//! the Kokoro preset should be chosen to sit close to the cloned Chatterbox voice.
-//! That pairing is a setup-time decision, not something to fix at runtime.
+//! Every configuration was measured before giving up: fp16 60ms/token, q4f16
+//! 65ms, int8 798ms, and CoreML *worse* than CPU at 105ms. Revisit only on
+//! hardware with a usable GPU. See CLAUDE.md step 7.
+//!
+//! `TtsManager` below is the handoff that was built for that plan. Nothing
+//! constructs it — `read_aloud` drives Kokoro directly — and it is kept only
+//! because it is the shape a second engine would slot into.
 
 pub mod chunk;
 pub mod kokoro;
