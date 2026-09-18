@@ -237,28 +237,17 @@ impl Kokoro {
         // Default CPU, deliberately. CoreML was tried and measured slower —
         // see the note at the top of this file.
         //
-        // Thread count is settable only so it can be measured. ONNX Runtime
-        // defaults to using every core, which on Apple silicon means spilling
-        // onto efficiency cores that are slower than the performance ones — so
-        // fewer threads is as plausible a win as more. Unset means the default.
-        //
-        //     NAXVOICE_KOKORO_THREADS=4 cargo test --release latency_shape -- --ignored --nocapture
-        let mut builder = Session::builder()?;
-        if let Some(n) = std::env::var("NAXVOICE_KOKORO_THREADS")
-            .ok()
-            .and_then(|v| v.parse::<usize>().ok())
-            .filter(|n| *n > 0)
-        {
-            // Not `.context`: this hands the builder back on failure, and that
-            // error type does not satisfy anyhow.
-            builder = builder
-                .with_intra_threads(n)
-                .map_err(|e| anyhow!("setting intra-op threads: {e}"))?;
-            tracing::info!(threads = n, "kokoro: intra-op thread count set");
-        }
-
-        let session = builder
-            .commit_from_file(&self.model)
+        // Thread count is left to ONNX Runtime, which was measured and is
+        // right. `with_intra_threads` was swept over 1, 2, 4, 6, 8 and 10 on a
+        // 10-core M1 Pro. A first pass appeared to show 8 threads winning by
+        // 17%, on the theory that the default spills work onto the two slower
+        // efficiency cores — but that pass ran each setting once, in order,
+        // while the machine was cooling from a build, so every later setting
+        // scored better for being later. Re-run alternating across three
+        // rounds, the default was fastest or tied every time and the whole
+        // effect vanished. Do not re-add it without alternating the runs.
+        let session = Session::builder()
+            .and_then(|mut b| b.commit_from_file(&self.model))
             .with_context(|| format!("loading {}", self.model.display()))?;
 
         let input_name = session
