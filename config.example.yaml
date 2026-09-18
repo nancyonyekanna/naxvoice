@@ -78,6 +78,19 @@ pronunciation:
     say: "nax crow"
 
 dictionary:
+  # Put the words *you* say here. These entries are examples, not defaults
+  # worth keeping — a dictionary full of someone else's vocabulary does
+  # nothing for yours.
+  #
+  # Each term works twice. The first `prompt_budget` terms are sent with the
+  # audio to bias transcription, and every `sounds_like` variant is handed to
+  # the cleanup model as an explicit correction, so a word that slips past the
+  # first still gets fixed by the second.
+  #
+  # `sounds_like` is what transcription produced *instead* of the term. Read
+  # the History screen after a few dictations: whatever it got wrong belongs
+  # here. Real example from this project — "Mac" came back as "Mark", so
+  # `- term: "Mac"` with `sounds_like: ["Mark"]` fixed it.
   prompt_budget: 40            # top N terms biased into the transcription prompt
   terms:
     - term: "Naxcrow"
