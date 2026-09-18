@@ -106,12 +106,33 @@ profiles:
   default:
     prompt: >
       Remove filler words and false starts. Fix grammar and punctuation.
-      Keep the speaker's own voice and word choice. Do not add or invent content.
+
+
+      Dictation mishears words. Where a word is clearly wrong and the intended
+      word is obvious from the surrounding sentence, correct it: "app tree" is
+      "app tray", "four loop" is "for loop". Correct only what the context makes
+      unambiguous. If you are not sure, leave the word alone, because a wrong
+      correction is worse than a wrong transcription: the speaker can no longer
+      tell what they said.
+
+
+      Keep the speaker's voice, phrasing and vocabulary. Do not add or invent
+      content, and do not rewrite sentences that are merely informal.
 
   "Code|Code.exe|cursor":
     prompt: >
       Technical dictation. Never alter identifiers, file paths, package names or
       case. Format code as code. No pleasantries, no restating the request.
+
+
+      Dictation mishears ordinary words. Where a word is clearly wrong and the
+      intended word is obvious from the surrounding sentence, correct it: "app
+      tree" is "app tray", "four loop" is "for loop". This applies to prose
+      only. Never guess at an identifier, file path, package name, command or
+      anything written as code, however odd it looks: those are far more likely
+      to be exactly what was said. If you are not sure, leave the word alone,
+      because a wrong correction is worse than a wrong transcription: the
+      speaker can no longer tell what they said.
     strip_fillers: true
     auto_capitalize: false
 
