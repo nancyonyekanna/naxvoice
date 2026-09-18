@@ -32,7 +32,7 @@ use objc2_app_kit::{
 use objc2_application_services::AXIsProcessTrusted;
 use objc2_foundation::{MainThreadMarker, NSString};
 
-use super::{DictateKey, FocusTarget, KeyEdge, Platform};
+use super::{FocusTarget, KeyEdge, Platform, WatchedKey};
 
 /// Virtual keycodes (`kVK_ANSI_*`, and the Command keys). These are physical key
 /// positions rather than characters, so they do not change with the layout.
@@ -42,6 +42,8 @@ const KEY_C: u16 = 0x08;
 const KEY_COMMAND: u16 = 0x37;
 /// Right Command. Same table: SuperRight => 0x36.
 const KEY_RIGHT_COMMAND: u16 = 0x36;
+/// Right Option. Apple's Events.h: kVK_RightOption = 0x3D; tao: AltRight.
+const KEY_RIGHT_OPTION: u16 = 0x3D;
 
 /// IOKit's Input Monitoring check. There is no Rust binding for this in the
 /// tree, and it is three lines, so it is declared here rather than pulling in a
@@ -115,15 +117,33 @@ impl Platform for Darwin {
     }
 
     fn paste_at_cursor(&self, text: &str) -> Result<()> {
+        let pasteboard = NSPasteboard::generalPasteboard();
+        let kind = unsafe { NSPasteboardTypeString };
+
         if !self.has_input_permission() {
+            // Leave the text on the clipboard instead of discarding it.
+            //
+            // Without Accessibility the keystroke cannot be sent, and this used
+            // to bail before the pasteboard was touched at all — so a dictation
+            // that had been recorded, transcribed and polished was thrown away
+            // at the very last step. The permission is still the problem, but
+            // losing the words on top of it is a separate and worse failure.
+            // Deliberately not restored afterwards: the point is that it stays.
+            pasteboard.clearContents();
+            let payload = NSString::from_str(text);
+            if pasteboard.setString_forType(&payload, kind) {
+                bail!(
+                    "Accessibility permission is not granted, so the paste could not \
+                     be sent. The text is on the clipboard — press Cmd+V to place it. \
+                     Grant Accessibility in System Settings and relaunch to have it \
+                     pasted for you."
+                );
+            }
             bail!(
                 "Accessibility permission is not granted, so the paste would be \
                  silently dropped. Grant it in System Settings, then relaunch."
             );
         }
-
-        let pasteboard = NSPasteboard::generalPasteboard();
-        let kind = unsafe { NSPasteboardTypeString };
 
         let borrowed = pasteboard.stringForType(kind).map(|s| s.to_string());
 
@@ -224,14 +244,19 @@ impl Platform for Darwin {
         Ok(activated)
     }
 
-    fn watch_dictate_key(
+    fn watch_key(
         &self,
-        key: DictateKey,
+        key: WatchedKey,
         on_edge: Box<dyn Fn(KeyEdge) + Send + Sync + 'static>,
     ) -> Result<()> {
-        let keycode = match key {
-            DictateKey::RightCommand => KEY_RIGHT_COMMAND,
-            DictateKey::LeftCommand => KEY_COMMAND,
+        // The modifier bit travels with the keycode. `keyCode` says which
+        // physical key moved; whether it is now *down* is read from that key's
+        // own flag, so watching an Option key while testing the Command bit
+        // would report every press as a release.
+        let (keycode, flag) = match key {
+            WatchedKey::RightCommand => (KEY_RIGHT_COMMAND, NSEventModifierFlags::Command),
+            WatchedKey::LeftCommand => (KEY_COMMAND, NSEventModifierFlags::Command),
+            WatchedKey::RightOption => (KEY_RIGHT_OPTION, NSEventModifierFlags::Option),
         };
 
         let block = RcBlock::new(move |event: std::ptr::NonNull<NSEvent>| {
@@ -251,9 +276,7 @@ impl Platform for Darwin {
             // holding both Command keys and releasing one leaves the bit set, so
             // that release reads as a press. Rare enough to accept, and the
             // alternative is tracking per-key state the OS does not expose.
-            let down = event
-                .modifierFlags()
-                .contains(NSEventModifierFlags::Command);
+            let down = event.modifierFlags().contains(flag);
 
             on_edge(if down { KeyEdge::Down } else { KeyEdge::Up });
         });
@@ -272,7 +295,7 @@ impl Platform for Darwin {
         std::mem::forget(monitor);
         std::mem::forget(block);
 
-        tracing::info!(?key, keycode, "watching the dictation key");
+        tracing::info!(?key, keycode, "watching key");
         Ok(())
     }
 
@@ -380,6 +403,11 @@ mod tests {
     fn keycodes_match_apple_virtual_key_table() {
         assert_eq!(KEY_V, 0x09);
         assert_eq!(KEY_C, 0x08);
+        // The modifier keycodes were claimed as verified but never pinned here.
+        // All three are from Apple's Events.h and agree with tao's table.
+        assert_eq!(KEY_RIGHT_COMMAND, 0x36, "kVK_RightCommand");
+        assert_eq!(KEY_COMMAND, 0x37, "kVK_Command");
+        assert_eq!(KEY_RIGHT_OPTION, 0x3D, "kVK_RightOption");
     }
 
     /// The permission check must never panic — it runs on every paste, and a

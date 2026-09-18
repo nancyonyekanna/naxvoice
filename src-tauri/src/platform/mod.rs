@@ -20,27 +20,35 @@ pub enum KeyEdge {
     Up,
 }
 
-/// The key that drives dictation.
+/// A bare modifier the app watches rather than registers.
 ///
-/// Only the two Command keys, because these are the only keycodes verified
-/// against a real table. Adding Option or Control is a matter of confirming
-/// their values rather than guessing them — a wrong keycode here produces a key
-/// that silently never fires, which is painful to diagnose.
+/// Every keycode here is confirmed against two sources before being added:
+/// Apple's `Events.h` (`kVK_*`) and tao's macOS table. That bar exists because
+/// a wrong keycode produces a key that silently never fires, which is painful
+/// to diagnose — so guessing one is not acceptable, however plausible it looks.
+///
+///   RightCommand  kVK_RightCommand 0x36   tao SuperRight
+///   LeftCommand   kVK_Command      0x37   tao SuperLeft
+///   RightOption   kVK_RightOption  0x3D   tao AltRight
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DictateKey {
+pub enum WatchedKey {
     RightCommand,
     LeftCommand,
+    RightOption,
 }
 
-impl std::str::FromStr for DictateKey {
+impl std::str::FromStr for WatchedKey {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self> {
         match s.trim().to_ascii_lowercase().replace(['_', '-', ' '], "").as_str() {
             "rightcommand" | "rightcmd" | "rcmd" => Ok(Self::RightCommand),
             "leftcommand" | "leftcmd" | "lcmd" => Ok(Self::LeftCommand),
+            // "alt" spellings too: the key is labelled Option on some keyboards
+            // and Alt on others, and both names reach the same physical key.
+            "rightoption" | "rightopt" | "ropt" | "rightalt" | "ralt" => Ok(Self::RightOption),
             other => anyhow::bail!(
-                "unknown dictate_key {other:?}. Supported: RightCommand, LeftCommand"
+                "unknown key {other:?}. Supported: RightCommand, LeftCommand, RightOption"
             ),
         }
     }
@@ -94,9 +102,9 @@ pub trait Platform: Send + Sync {
     ///
     /// `on_edge` is called from an OS event thread, so it must return promptly
     /// and do its real work elsewhere.
-    fn watch_dictate_key(
+    fn watch_key(
         &self,
-        key: DictateKey,
+        key: WatchedKey,
         on_edge: Box<dyn Fn(KeyEdge) + Send + Sync + 'static>,
     ) -> Result<()>;
 

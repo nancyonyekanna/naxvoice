@@ -212,9 +212,8 @@ fn run() -> Result<()> {
                 player: std::sync::Arc::new(audio::player::Player::new()),
             });
 
-            let read_aloud_key = hotkeys::parse_accelerator(&config.hotkeys.read_aloud)?;
-            let config_read_aloud = config.hotkeys.read_aloud.clone();
             let dictate_key = config.hotkeys.dictate()?;
+            let read_aloud_key = config.hotkeys.read_aloud_watch()?;
             app.manage(hotkeys::Dictation::new(config.hotkeys.latch_window()));
             app.manage(config);
 
@@ -258,15 +257,29 @@ fn run() -> Result<()> {
             // pressing it again stops. `stop` in config.yaml stays unregistered
             // on purpose: binding Escape globally would swallow it from every
             // other application.
-            hotkeys::register_read_aloud(app.handle(), read_aloud_key, &config_read_aloud)?;
 
             // Watch the key rather than registering it: a bare modifier cannot
             // be a global hotkey, and watching leaves it working normally in
             // whatever app has focus.
             let handle = app.handle().clone();
-            app.state::<Platforms>().0.watch_dictate_key(
+            app.state::<Platforms>().0.watch_key(
                 dictate_key,
                 Box::new(move |edge| hotkeys::on_key_edge(&handle, edge)),
+            )?;
+
+            // Read-aloud is watched too, rather than registered as an
+            // accelerator. It was CmdOrCtrl+Shift+R, which sat oddly beside a
+            // single-key dictation control. Only the press edge acts: a tap
+            // starts reading and the next tap stops it, so reacting to the
+            // release as well would toggle straight back.
+            let handle = app.handle().clone();
+            app.state::<Platforms>().0.watch_key(
+                read_aloud_key,
+                Box::new(move |edge| {
+                    if edge == platform::KeyEdge::Down {
+                        tts::read_aloud::toggle(&handle);
+                    }
+                }),
             )?;
 
             // Input Monitoring is a different grant from Accessibility. Without

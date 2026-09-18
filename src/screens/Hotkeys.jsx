@@ -3,9 +3,13 @@ import { useConfig } from "../lib/useConfig.js";
 // Built from what the code accepts, not from design/wireframes.html — that
 // frame still shows Cmd+Shift+Space and a separate "dictate raw" key, which is
 // the design replaced by one key you hold or double-tap to latch.
-const DICTATE_KEYS = [
+// Every key the watcher supports. Short on purpose: each keycode is confirmed
+// against Apple's Events.h and tao's table before being offered, because a
+// wrong one produces a key that silently never fires.
+const KEYS = [
   { id: "RightCommand", label: "Right Command" },
   { id: "LeftCommand", label: "Left Command" },
+  { id: "RightOption", label: "Right Option" },
 ];
 
 export default function Hotkeys() {
@@ -34,7 +38,7 @@ export default function Hotkeys() {
             value={config.hotkeys.dictate_key}
             onChange={(e) => edit(["hotkeys", "dictate_key"], e.target.value)}
           >
-            {DICTATE_KEYS.map((k) => (
+            {KEYS.map((k) => (
               <option key={k.id} value={k.id}>
                 {k.label}
               </option>
@@ -61,14 +65,29 @@ export default function Hotkeys() {
         </div>
 
         <div className="row">
-          <span>Read selection aloud</span>
-          <input
-            className="mono"
-            value={config.hotkeys.read_aloud}
-            onChange={(e) => edit(["hotkeys", "read_aloud"], e.target.value)}
-            style={{ width: 180 }}
-          />
+          <span>
+            Read selection aloud
+            <span className="meta"> · tap to start, tap again to stop</span>
+          </span>
+          <select
+            value={config.hotkeys.read_aloud_key}
+            onChange={(e) => edit(["hotkeys", "read_aloud_key"], e.target.value)}
+          >
+            {KEYS.map((k) => (
+              <option key={k.id} value={k.id}>
+                {k.label}
+              </option>
+            ))}
+          </select>
         </div>
+        {config.hotkeys.read_aloud_key === config.hotkeys.dictate_key ? (
+          <div className="row">
+            <span className="meta">
+              This is the same key as dictation. One key cannot do both — pick a
+              different one.
+            </span>
+          </div>
+        ) : null}
 
         <div className="row">
           <span>

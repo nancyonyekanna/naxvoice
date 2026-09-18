@@ -29,7 +29,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetForegroundWindow, GetWindowThreadProcessId, IsWindow, SetForegroundWindow,
 };
 
-use super::{DictateKey, FocusTarget, KeyEdge, Platform};
+use super::{FocusTarget, KeyEdge, Platform, WatchedKey};
 
 /// Let the target app service the synthetic paste before the old clipboard
 /// goes back. See the same constant in `darwin.rs`.
@@ -141,9 +141,9 @@ impl Platform for Win32 {
         }
     }
 
-    fn watch_dictate_key(
+    fn watch_key(
         &self,
-        _key: DictateKey,
+        _key: WatchedKey,
         _on_edge: Box<dyn Fn(KeyEdge) + Send + Sync + 'static>,
     ) -> Result<()> {
         // Windows has no AppKit-style global monitor. The equivalent is a

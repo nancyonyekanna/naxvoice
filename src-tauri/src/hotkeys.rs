@@ -25,7 +25,6 @@ use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 use tauri::{AppHandle, Manager, Runtime};
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use crate::audio::recorder::{chunk_to_wav, Chunk, Recorder};
@@ -67,37 +66,6 @@ impl Dictation {
     pub fn new(latch_window: Duration) -> Self {
         Self { state: Mutex::new(State::Idle), latch_window }
     }
-}
-
-/// Parses a Tauri accelerator such as `CmdOrCtrl+Shift+R`.
-///
-/// Read-aloud still uses one of these, unlike dictation: it is a discrete press
-/// rather than hold-to-talk, so it can be registered normally.
-pub fn parse_accelerator(accelerator: &str) -> Result<Shortcut> {
-    accelerator
-        .parse::<Shortcut>()
-        .map_err(|e| anyhow::anyhow!("{e}"))
-        .with_context(|| format!("parsing accelerator {accelerator:?}"))
-}
-
-/// Registers the read-aloud key. Pressing it again while speaking stops.
-pub fn register_read_aloud<R: Runtime>(
-    app: &AppHandle<R>,
-    shortcut: Shortcut,
-    accelerator: &str,
-) -> Result<()> {
-    let handle = app.clone();
-    app.global_shortcut()
-        .on_shortcut(shortcut, move |_, _, event| {
-            // Fire on press only: the release edge would toggle straight back.
-            if event.state() == ShortcutState::Pressed {
-                crate::tts::read_aloud::toggle(&handle);
-            }
-        })
-        .with_context(|| format!("registering read_aloud shortcut {accelerator:?}"))?;
-
-    tracing::info!(accelerator, "read-aloud shortcut registered");
-    Ok(())
 }
 
 /// Called for every press and release of the dictation key.
@@ -528,16 +496,18 @@ fn paste<R: Runtime>(app: &AppHandle<R>, text: &str) -> Result<()> {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::platform::DictateKey;
+    use crate::platform::WatchedKey;
 
     const EXAMPLE: &str = include_str!("../../config.example.yaml");
 
     #[test]
     fn the_example_config_names_a_usable_dictation_key() {
         let h = Config::from_yaml(EXAMPLE).unwrap().hotkeys;
-        assert_eq!(h.dictate().unwrap(), DictateKey::RightCommand);
-        // read_aloud and stop are still accelerators, for steps 6 and 7.
-        assert!(!h.read_aloud.is_empty());
+        assert_eq!(h.dictate().unwrap(), WatchedKey::RightCommand);
+        // Read-aloud is a watched key too now, not an accelerator, and it must
+        // not be the same key as dictation — one key cannot do both.
+        assert_eq!(h.read_aloud_watch().unwrap(), WatchedKey::RightOption);
+        assert_ne!(h.dictate().unwrap(), h.read_aloud_watch().unwrap());
     }
 
     #[test]

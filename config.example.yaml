@@ -8,9 +8,14 @@ hotkeys:
   # This is a key name, not an accelerator, because a bare modifier cannot be
   # registered as a global hotkey on macOS at all. It is watched instead of
   # registered, which also means it keeps working as a normal Command key.
-  # Supported: RightCommand, LeftCommand.
+  # Supported: RightCommand, LeftCommand, RightOption.
   dictate_key: "RightCommand"
   latch_ms: 350                # a second tap within this window latches
+  # Read-aloud is a watched key too: tap once to start reading the selection,
+  # tap again to stop. Supported: RightCommand, LeftCommand, RightOption.
+  # It must not be the same key as dictate_key.
+  read_aloud_key: "RightOption"
+  # Vestigial. Read-aloud used to be this accelerator; it is a watched key now.
   read_aloud: "CmdOrCtrl+Shift+R"
   stop: "Escape"
 

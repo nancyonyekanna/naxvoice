@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::audio::vad::ChunkPolicy;
 use crate::cleanup::{DictionaryTerm, Profile};
-use crate::platform::DictateKey;
+use crate::platform::WatchedKey;
 use crate::tts::normalize::PronunciationRule;
 use crate::tts::{Engine, VoiceConfig};
 
@@ -64,8 +64,21 @@ pub struct Hotkeys {
     pub dictate_key: String,
     #[serde(default = "default_latch_ms")]
     pub latch_ms: u64,
+    /// Vestigial. Read-aloud was `CmdOrCtrl+Shift+R`, a registered accelerator,
+    /// which sat oddly next to a single-key dictation control. It is a watched
+    /// key now — see `read_aloud_key`. Kept only so a config.yaml written
+    /// before the change still loads.
     pub read_aloud: String,
+    /// A key name, watched like `dictate_key`. Defaulted, so an existing
+    /// config.yaml that predates it keeps working: a key with no default is
+    /// what broke startup once already.
+    #[serde(default = "default_read_aloud_key")]
+    pub read_aloud_key: String,
     pub stop: String,
+}
+
+fn default_read_aloud_key() -> String {
+    "RightOption".to_string()
 }
 
 fn default_latch_ms() -> u64 {
@@ -73,8 +86,16 @@ fn default_latch_ms() -> u64 {
 }
 
 impl Hotkeys {
-    pub fn dictate(&self) -> Result<DictateKey> {
+    pub fn dictate(&self) -> Result<WatchedKey> {
         self.dictate_key.parse()
+    }
+
+    /// The key that starts and stops read-aloud.
+    ///
+    /// Named `_watch` rather than `read_aloud` because the struct still carries
+    /// the old accelerator field under that name.
+    pub fn read_aloud_watch(&self) -> Result<WatchedKey> {
+        self.read_aloud_key.parse()
     }
 
     /// How long after a release a second tap still counts as a double-tap.
@@ -471,7 +492,7 @@ mod tests {
     #[test]
     fn the_dictate_key_resolves_to_a_real_key() {
         let h = example().hotkeys;
-        assert_eq!(h.dictate().unwrap(), DictateKey::RightCommand);
+        assert_eq!(h.dictate().unwrap(), WatchedKey::RightCommand);
         assert_eq!(h.latch_window(), Duration::from_millis(350));
     }
 
@@ -479,7 +500,7 @@ mod tests {
     fn an_unknown_dictate_key_is_an_error_not_a_default() {
         // Silently falling back would give a key that never fires, which is the
         // single hardest failure in this app to diagnose.
-        let bad: Result<DictateKey> = "CapsLock".parse();
+        let bad: Result<WatchedKey> = "CapsLock".parse();
         assert!(bad.is_err());
     }
 
