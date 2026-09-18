@@ -11,7 +11,8 @@ models/
 .DS_Store
 .env
 
-# Kokoro weights download on first use and are far too large to commit.
+# The Kokoro weights are placed by hand (see SETUP.md) and are far too
+# large to commit.
 # Named explicitly rather than by wildcard: a blanket *.onnx rule also caught
 # the 1.3MB Silero VAD model, which MUST stay committed because vad.rs embeds
 # it with include_bytes! and the build fails without it.

@@ -1,0 +1,205 @@
+/* Quiet and dense, per DESIGN.md: hairline borders, no shadows, no gradients,
+   no accent colour except status. This is a settings surface someone opens
+   rarely and wants to leave quickly.
+
+   Written for this app. design/wireframes.html is the layout reference — which
+   rows sit where — not a stylesheet to copy. */
+
+:root {
+  color-scheme: light dark;
+
+  --ink: #18181b;
+  --muted: #71717a;
+  --line: #e4e4e7;
+  --ground: #ffffff;
+  --raised: #fafafa;
+
+  --ok: #16a34a;
+  --warn: #d97706;
+  --bad: #dc2626;
+
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #f4f4f5;
+    --muted: #a1a1aa;
+    --line: #27272a;
+    --ground: #18181b;
+    --raised: #1f1f23;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--ground);
+  font: 13px/1.5 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  height: 100vh;
+}
+
+/* Sidebar: single level, no nesting, seven items fit without scrolling. */
+.side {
+  border-right: 1px solid var(--line);
+  padding: 14px 8px;
+  background: var(--raised);
+  overflow-y: auto;
+}
+
+.brand {
+  margin: 0 0 12px 8px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.side button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.side button:hover {
+  color: var(--ink);
+}
+
+.side button.on {
+  background: var(--ground);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.pane {
+  padding: 20px 24px;
+  overflow-y: auto;
+}
+
+.pane-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.pane-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.pill {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.tile {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 12px;
+}
+
+.tile .k {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.tile .v {
+  margin: 4px 0 0;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile .s {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.rows {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.row .meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+/* Colour never carries meaning alone: every dot sits beside state text. */
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.dot.ok {
+  background: var(--ok);
+}
+.dot.warn {
+  background: var(--warn);
+}
+.dot.bad {
+  background: var(--bad);
+}
+
+.hint {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.empty {
+  border: 1px dashed var(--line);
+  border-radius: 7px;
+  padding: 16px;
+  color: var(--muted);
+}

@@ -22,6 +22,7 @@ mod audio;
 mod cleanup;
 #[allow(dead_code)]
 mod config;
+mod dashboard;
 mod hotkeys;
 mod overlay;
 mod platform;
@@ -71,7 +72,8 @@ fn run() -> Result<()> {
         // calls into Rust for; everything else is driven from this side.
         .invoke_handler(tauri::generate_handler![
             overlay::overlay_stop,
-            overlay::overlay_dismiss
+            overlay::overlay_dismiss,
+            dashboard::status_snapshot
         ])
         .setup(move |app| {
             // Held in managed state so the shortcut handler, which only ever
@@ -185,6 +187,15 @@ fn run() -> Result<()> {
                 tauri::async_runtime::spawn(async move { overlay::self_test(&handle).await });
             }
 
+            // Opens the settings window at launch. The tray menu is the real
+            // way in, but a menu item cannot be clicked from a test, and a
+            // window that fails to build should not need a human to discover it.
+            if std::env::var_os("NAXVOICE_OPEN_SETTINGS").is_some() {
+                if let Err(e) = dashboard::open(app.handle()) {
+                    tracing::error!(error = format!("{e:#}"), "settings window failed to open");
+                }
+            }
+
             // Read-aloud is a discrete press rather than hold-to-talk, so an
             // ordinary registered accelerator is the right shape for it — and
             // pressing it again stops. `stop` in config.yaml stays unregistered
@@ -245,8 +256,9 @@ fn init_tracing() {
 /// The icon is a template image: black plus alpha, which macOS recolours for a
 /// light or dark menu bar. A fixed-colour icon is invisible in one of the two.
 fn build_tray<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
+    let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit naxvoice", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&quit])?;
+    let menu = Menu::with_items(app, &[&settings, &quit])?;
 
     TrayIconBuilder::with_id("naxvoice")
         .icon(tauri::include_image!("./icons/tray.png"))
@@ -254,11 +266,17 @@ fn build_tray<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
         .tooltip("naxvoice")
         .menu(&menu)
         .show_menu_on_left_click(true)
-        .on_menu_event(|app, event| {
-            if event.id() == "quit" {
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "settings" => {
+                if let Err(e) = dashboard::open(app) {
+                    tracing::error!(error = format!("{e:#}"), "could not open settings");
+                }
+            }
+            "quit" => {
                 tracing::info!("quit from tray menu");
                 app.exit(0);
             }
+            other => tracing::debug!(id = other, "unhandled tray menu item"),
         })
         .build(app)
         .context("building tray icon")?;
