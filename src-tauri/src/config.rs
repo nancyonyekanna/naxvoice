@@ -553,6 +553,46 @@ mod tests {
         }
     }
 
+    /// Round-trips the config this machine actually runs on.
+    ///
+    /// The example is committed and known-good. The live file is the one the
+    /// dashboard's Save button overwrites, and it can hold profiles,
+    /// pronunciation rules and dictionary terms the example never had. A save
+    /// that cannot be read back breaks startup.
+    ///
+    /// Ignored by default because it depends on the machine it runs on.
+    ///
+    ///     cargo test the_live_config -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn the_live_config_survives_a_save() {
+        let Ok(path) = Config::path() else {
+            eprintln!("  no config.yaml on this machine, nothing to check");
+            return;
+        };
+
+        let original = Config::load_from(&path).expect("loading the live config");
+        let yaml = original.to_yaml().expect("serialising");
+        let reloaded = Config::from_yaml(&yaml).expect("reparsing the saved form");
+
+        assert_eq!(reloaded.profiles.len(), original.profiles.len(), "profiles lost");
+        assert_eq!(
+            reloaded.pronunciation.len(),
+            original.pronunciation.len(),
+            "pronunciation rules lost"
+        );
+        assert_eq!(
+            reloaded.dictionary.terms.len(),
+            original.dictionary.terms.len(),
+            "dictionary terms lost"
+        );
+        for (key, profile) in &reloaded.profiles {
+            assert_eq!(&profile.pattern, key, "a profile pattern was not refilled");
+        }
+
+        eprintln!("  {} round-trips cleanly", path.display());
+    }
+
     /// The pronunciation entry spells its field `match` in YAML, which is a
     /// Rust keyword. A save that emitted `matches` instead would parse as an
     /// empty rule set on the next launch, silently dropping every rule.

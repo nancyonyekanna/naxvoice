@@ -27,7 +27,6 @@ use crate::tts::AudioSegment;
 #[derive(Default)]
 struct Buffer {
     samples: std::collections::VecDeque<f32>,
-    finished: bool,
 }
 
 pub struct Player {
@@ -58,7 +57,6 @@ impl Player {
         self.playing.store(false, Ordering::Relaxed);
         if let Ok(mut b) = self.buffer.lock() {
             b.samples.clear();
-            b.finished = true;
         }
     }
 
@@ -82,7 +80,6 @@ impl Player {
         {
             let mut b = self.buffer.lock().map_err(|_| anyhow!("player lock poisoned"))?;
             b.samples.clear();
-            b.finished = false;
         }
         self.playing.store(true, Ordering::Relaxed);
 
@@ -132,10 +129,6 @@ impl Player {
             if let Ok(mut b) = buffer.lock() {
                 b.samples.extend(leftover);
             }
-        }
-
-        if let Ok(mut b) = buffer.lock() {
-            b.finished = true;
         }
 
         // Wait for the queue to drain, unless stopped.
@@ -238,7 +231,6 @@ mod tests {
     fn mono_is_written_to_every_channel() {
         let buffer = Arc::new(Mutex::new(Buffer {
             samples: vec![0.5, 0.25].into(),
-            finished: false,
         }));
         let mut out = [0.0f32; 4];
         fill(&mut out, 2, &buffer);
