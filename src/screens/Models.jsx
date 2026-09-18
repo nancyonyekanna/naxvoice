@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useConfig } from "../lib/useConfig.js";
 
 const invoke = (...args) => window.__TAURI__?.core?.invoke(...args);
 
@@ -21,15 +22,15 @@ const OFFLINE = [
 ];
 
 export default function Models() {
-  const [config, setConfig] = useState(null);
+  const { config, note, setNote, edit, save } = useConfig();
   const [key, setKey] = useState(null);
   const [typed, setTyped] = useState("");
-  const [note, setNote] = useState(null);
 
+  // The key is not part of config.yaml and never will be, so it loads
+  // separately from the keychain rather than through useConfig.
   useEffect(() => {
-    invoke("get_config")?.then(setConfig).catch((e) => setNote(String(e)));
     invoke("api_key_status")?.then(setKey).catch((e) => setNote(String(e)));
-  }, []);
+  }, [setNote]);
 
   if (!config) {
     return (
@@ -39,27 +40,6 @@ export default function Models() {
       </>
     );
   }
-
-  const edit = (path, value) => {
-    // Shallow clone down the one path being changed, so the rest of the
-    // structure round-trips back to Rust exactly as it arrived.
-    setConfig((prev) => {
-      const next = structuredClone(prev);
-      let node = next;
-      for (const part of path.slice(0, -1)) node = node[part];
-      node[path[path.length - 1]] = value;
-      return next;
-    });
-  };
-
-  const save = async () => {
-    try {
-      await invoke("save_config", { config });
-      setNote("Saved. Changes take effect when naxvoice restarts.");
-    } catch (e) {
-      setNote(String(e));
-    }
-  };
 
   const saveKey = async () => {
     try {

@@ -79,7 +79,8 @@ fn run() -> Result<()> {
             dashboard::save_config,
             dashboard::api_key_status,
             dashboard::set_api_key,
-            dashboard::clear_api_key
+            dashboard::clear_api_key,
+            dashboard::preview_cleanup
         ])
         .setup(move |app| {
             // Held in managed state so the shortcut handler, which only ever

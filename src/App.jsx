@@ -4,10 +4,12 @@ import Models from "./screens/Models.jsx";
 import Dictionary from "./screens/Dictionary.jsx";
 import Voice from "./screens/Voice.jsx";
 import Hotkeys from "./screens/Hotkeys.jsx";
+import Profiles from "./screens/Profiles.jsx";
 
 const BUILT = {
   status: Status,
   models: Models,
+  profiles: Profiles,
   dictionary: Dictionary,
   voice: Voice,
   hotkeys: Hotkeys,

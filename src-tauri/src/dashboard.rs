@@ -87,6 +87,37 @@ pub fn save_config(config: Config) -> Result<(), String> {
     config.save().map_err(|e| format!("{e:#}"))
 }
 
+/// Runs a sample transcript through a profile, without saving anything.
+///
+/// DESIGN.md calls the preview "the only way to tell whether a prompt edit did
+/// what you wanted without leaving the screen", which means it has to use the
+/// real cleanup path rather than an approximation of it.
+///
+/// The profile arrives from the editor rather than from config, so what is
+/// previewed is what is on screen, including unsaved edits. Its `pattern` is
+/// skipped by serde and defaults to empty, which is correct here: a preview
+/// belongs to no particular app.
+#[tauri::command]
+pub async fn preview_cleanup(
+    app: AppHandle,
+    transcript: String,
+    profile: crate::cleanup::Profile,
+) -> Result<String, String> {
+    // Both guards are dropped at the end of their statements, before the await.
+    // Holding managed state across an await would make this command non-Send.
+    let client = app.state::<crate::Cleanup>().0.clone();
+    let dictionary = app.state::<Config>().dictionary.terms();
+
+    let client = client.ok_or_else(|| {
+        "No OpenRouter key is configured, so there is nothing to preview with.".to_string()
+    })?;
+
+    client
+        .polish(&transcript, &profile, &dictionary)
+        .await
+        .map_err(|e| format!("{e:#}"))
+}
+
 /// Whether a key is installed, and where it came from. Never the key itself.
 #[tauri::command]
 pub fn api_key_status() -> secrets::KeyStatus {
