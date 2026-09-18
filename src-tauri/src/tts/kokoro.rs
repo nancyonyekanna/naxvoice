@@ -55,6 +55,21 @@ static ESPEAK: OnceLock<Result<(), String>> = OnceLock::new();
 ///
 /// Serialising costs nothing worth measuring: phonemisation is around 22ms
 /// against roughly 1480ms of synthesis per spoken second.
+///
+/// That figure is the floor on this hardware, not a starting point. CoreML was
+/// registered as an execution provider and measured across four lengths: 1519,
+/// 1559, 1633 and 1594ms per spoken second, against 1464, 1423, 1434 and 1441
+/// on the default CPU provider. Consistently about 10% slower, so the code for
+/// it was removed rather than left as a switch nobody should flip. The same
+/// happened with Chatterbox's decoder, where CoreML cost 105ms per token
+/// against 65ms on CPU.
+///
+/// The consequence is structural: synthesis runs about 1.44x slower than the
+/// speech it produces, so playback started before rendering finishes will
+/// always fall behind. Measured on a 651-character passage: 19.2 seconds of
+/// inserted silence across a 66.2 second read, and 9.8 seconds before the first
+/// word, nearly all of it spent rendering the first unit rather than loading
+/// the model.
 static ESPEAK_CALLS: Mutex<()> = Mutex::new(());
 
 pub struct Kokoro {
@@ -219,6 +234,8 @@ impl Kokoro {
             );
         }
 
+        // Default CPU, deliberately. CoreML was tried and measured slower —
+        // see the note at the top of this file.
         let session = Session::builder()
             .and_then(|mut b| b.commit_from_file(&self.model))
             .with_context(|| format!("loading {}", self.model.display()))?;

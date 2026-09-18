@@ -5,6 +5,25 @@
 //! sound would leave seconds of silence. Segments are therefore played as they
 //! arrive, while later ones are still being rendered.
 //!
+//! **The gaps that follow from this are deliberate.** Because rendering is
+//! about 1.44x slower than the speech it produces, playback catches up and the
+//! queue runs dry. Measured on a 651-character passage: 19.2 seconds of
+//! inserted silence across a 66.2 second read. `starved_frames` counts it.
+//!
+//! Every alternative was measured and is worse. Rendering the whole passage
+//! first removes the gaps but costs about 1.4x the passage length in silence
+//! before the first word — roughly ninety seconds for a one-minute article.
+//! A partial buffer cannot remove them either, because the deficit accumulates
+//! for as long as the passage lasts. Starting sooner by splitting the opening
+//! sentence mid-clause is what `tts::chunk` exists to prevent: it produces a
+//! falling intonation mid-sentence, and it would land on the first thing the
+//! listener hears. A faster engine would fix all of it, and there is not one —
+//! CoreML measured slower than CPU for this model.
+//!
+//! So the silence lands between sentences, never mid-word, because whole units
+//! are queued at once. That is the trade, chosen knowingly. Do not replace it
+//! with a pre-buffer without re-measuring the ratio first.
+//!
 //! They arrive out of order, because renders are dispatched concurrently, so
 //! the player reorders by index exactly as `stt::stitch` does for transcripts.
 //!
@@ -32,6 +51,14 @@ struct Buffer {
 pub struct Player {
     playing: Arc<AtomicBool>,
     buffer: Arc<Mutex<Buffer>>,
+    /// Frames of silence emitted *after* the first real sample, because
+    /// synthesis had not kept up. Counted in frames rather than callbacks so it
+    /// converts to milliseconds, and only after audio has begun: the silence
+    /// before the first sample is the start delay, not a gap in the speech, and
+    /// counting it made the first measurement of this useless.
+    starved_frames: Arc<std::sync::atomic::AtomicUsize>,
+    /// Whether any real sample has been played yet.
+    begun: Arc<AtomicBool>,
 }
 
 impl Default for Player {
@@ -45,6 +72,8 @@ impl Player {
         Self {
             playing: Arc::new(AtomicBool::new(false)),
             buffer: Arc::new(Mutex::new(Buffer::default())),
+            starved_frames: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            begun: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -82,16 +111,20 @@ impl Player {
             b.samples.clear();
         }
         self.playing.store(true, Ordering::Relaxed);
+        self.starved_frames.store(0, Ordering::Relaxed);
+        self.begun.store(false, Ordering::Relaxed);
 
         let buffer = Arc::clone(&self.buffer);
         let playing = Arc::clone(&self.playing);
 
         let cb_buffer = Arc::clone(&buffer);
+        let cb_starved = Arc::clone(&self.starved_frames);
+        let cb_begun = Arc::clone(&self.begun);
         let stream = match config.sample_format() {
             SampleFormat::F32 => device.build_output_stream::<f32, _, _>(
                 config.config(),
                 move |out: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    fill(out, channels, &cb_buffer);
+                    fill(out, channels, &cb_buffer, &cb_begun, &cb_starved);
                 },
                 move |e| tracing::error!(error = %e, "output stream error"),
                 None,
@@ -142,22 +175,57 @@ impl Player {
 
         drop(stream);
         self.playing.store(false, Ordering::Relaxed);
+
+        // Reported rather than silently tolerated: this is how long the
+        // listener heard nothing mid-passage because synthesis fell behind.
+        let frames = self.starved_frames.load(Ordering::Relaxed);
+        if frames > 0 {
+            tracing::info!(
+                ms = frames as u64 * 1000 / device_rate.max(1) as u64,
+                frames,
+                "silence inserted mid-read because synthesis fell behind"
+            );
+        }
         Ok(())
     }
 }
 
 /// Copies queued samples into the output, padding with silence when starved.
 ///
+/// Counts the padded frames, but only once real audio has started: silence
+/// before the first sample is the wait for the first unit to render, not a gap
+/// in the speech, and counting both together measures nothing useful.
+///
 /// Mono synthesis is written to every channel: a voice that comes out of one
 /// earpiece sounds broken.
-fn fill(out: &mut [f32], channels: usize, buffer: &Arc<Mutex<Buffer>>) {
+fn fill(
+    out: &mut [f32],
+    channels: usize,
+    buffer: &Arc<Mutex<Buffer>>,
+    begun: &AtomicBool,
+    starved_frames: &std::sync::atomic::AtomicUsize,
+) {
     let Ok(mut b) = buffer.lock() else {
         out.fill(0.0);
         return;
     };
+
+    let mut dry = 0usize;
     for frame in out.chunks_mut(channels.max(1)) {
-        let sample = b.samples.pop_front().unwrap_or(0.0);
-        frame.fill(sample);
+        match b.samples.pop_front() {
+            Some(sample) => {
+                begun.store(true, Ordering::Relaxed);
+                frame.fill(sample);
+            }
+            None => {
+                dry += 1;
+                frame.fill(0.0);
+            }
+        }
+    }
+
+    if dry > 0 && begun.load(Ordering::Relaxed) {
+        starved_frames.fetch_add(dry, Ordering::Relaxed);
     }
 }
 
@@ -233,7 +301,7 @@ mod tests {
             samples: vec![0.5, 0.25].into(),
         }));
         let mut out = [0.0f32; 4];
-        fill(&mut out, 2, &buffer);
+        fill(&mut out, 2, &buffer, &AtomicBool::new(false), &std::sync::atomic::AtomicUsize::new(0));
         // Stereo device: each mono sample fills both channels of its frame.
         assert_eq!(out, [0.5, 0.5, 0.25, 0.25]);
     }
@@ -242,7 +310,7 @@ mod tests {
     fn starved_output_is_silence_rather_than_noise() {
         let buffer = Arc::new(Mutex::new(Buffer::default()));
         let mut out = [1.0f32; 4];
-        fill(&mut out, 1, &buffer);
+        fill(&mut out, 1, &buffer, &AtomicBool::new(false), &std::sync::atomic::AtomicUsize::new(0));
         assert_eq!(out, [0.0; 4], "an empty queue must produce silence");
     }
 

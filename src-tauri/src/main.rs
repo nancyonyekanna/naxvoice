@@ -183,6 +183,30 @@ fn run() -> Result<()> {
             // not a failure to launch.
             let kokoro = std::sync::Arc::new(tts::kokoro::Kokoro::from_project_layout());
             tracing::info!(model = %kokoro.model_path().display(), "read-aloud engine");
+
+            // Loaded now rather than on the first key press. Measured: a cold
+            // read reached first audio in 10.0 seconds, nearly all of it the
+            // model load, against a design target of about 200ms.
+            //
+            // This does not undo the lazy construction above. Launch still
+            // cannot fail on a missing model — the failure is logged here and
+            // the key press still reports the path it could not find.
+            let warming = std::sync::Arc::clone(&kokoro);
+            tauri::async_runtime::spawn(async move {
+                use tts::Synthesizer as _;
+                let started = std::time::Instant::now();
+                match warming.warm().await {
+                    Ok(()) => tracing::info!(
+                        ms = started.elapsed().as_millis(),
+                        "read-aloud engine warmed"
+                    ),
+                    Err(e) => tracing::warn!(
+                        error = format!("{e:#}"),
+                        "read-aloud engine could not be warmed; it will load on first use"
+                    ),
+                }
+            });
+
             app.manage(tts::read_aloud::ReadAloud {
                 engine: kokoro,
                 player: std::sync::Arc::new(audio::player::Player::new()),
@@ -205,6 +229,19 @@ fn run() -> Result<()> {
             if std::env::var_os("NAXVOICE_OVERLAY_SELFTEST").is_some() {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move { overlay::self_test(&handle).await });
+            }
+
+            // Reads a fixed passage at launch, so playback starvation can be
+            // measured without a key press and without anything selected.
+            if std::env::var_os("NAXVOICE_READ_SELFTEST").is_some() {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let passage = tts::read_aloud::SELFTEST_PASSAGE;
+                    tracing::info!(chars = passage.len(), "read self-test starting");
+                    if let Err(e) = tts::read_aloud::read_text_aloud(&handle, passage).await {
+                        tracing::error!(error = format!("{e:#}"), "read self-test failed");
+                    }
+                });
             }
 
             // Opens the settings window at launch. The tray menu is the real

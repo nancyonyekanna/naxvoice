@@ -70,6 +70,28 @@ async fn read_selection_aloud<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
         return Ok(());
     }
 
+    read_text_aloud(app, &text).await
+}
+
+/// A passage long enough for playback to catch up with synthesis.
+///
+/// Kokoro renders at about 1480ms per spoken second, so anything beyond a few
+/// sentences will run the queue dry. This exists to make that reproducible.
+pub const SELFTEST_PASSAGE: &str = "\
+The paste target is captured when the key goes down, not when the text is ready. \
+By the time a transcript exists, focus has usually moved somewhere else entirely. \
+A notification may have appeared, or a background agent briefly activated, or the \
+user simply clicked into another window. Deciding where the text belongs at the \
+end would send it to whichever application happened to be in front at that moment. \
+Deciding at the start costs nothing and is almost always right. The same reasoning \
+applies to the application identifier that history records. It is read once, early, \
+and carried forward with the focus handle rather than looked up again later.";
+
+/// The pipeline, with the text already in hand.
+///
+/// Split out from the selection so a fixed passage can be read with no key
+/// press and nothing selected, which is how playback starvation is measured.
+pub async fn read_text_aloud<R: Runtime>(app: &AppHandle<R>, text: &str) -> Result<()> {
     // Normalise before splitting: expanding "Dr." to "Doctor" first is what
     // stops the splitter treating that full stop as a sentence boundary.
     let spoken = {
