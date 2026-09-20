@@ -3,22 +3,16 @@
 From download to a running dev build. Do this on one machine first, push to
 GitHub, then clone on the second.
 
-## 1. Put the folder where you want it
+## 1. Get it
 
-Unzip `naxvoice-scaffold.zip`. Move the `naxvoice` folder into Documents, or
-wherever you keep repos.
-
-macOS:
 ```bash
-mv ~/Downloads/naxvoice ~/Documents/naxvoice
-cd ~/Documents/naxvoice
+git clone https://github.com/YOURUSER/naxvoice.git
+cd naxvoice
 ```
 
-Windows (PowerShell):
-```powershell
-Move-Item $HOME\Downloads\naxvoice $HOME\Documents\naxvoice
-cd $HOME\Documents\naxvoice
-```
+macOS works today. **Windows does not yet**: the dictation key is watched
+rather than registered, and the Windows implementation of that is an explicit
+`bail!` — the key will never fire. See `platform/win32.rs`.
 
 ## 2. Prerequisites
 
@@ -162,8 +156,46 @@ if the build fails you want to know it is the toolchain and not your code.
 npm run tauri dev
 ```
 
-macOS needs Accessibility permission before the paste will work. Without it,
-hotkeys register and dictation transcribes, but the paste silently does nothing.
+macOS needs two separate permissions, and they are not interchangeable:
+
+- **Input Monitoring** decides whether the dictation key fires at all. Without
+  it nothing is recorded and the app looks dead.
+- **Accessibility** decides whether the text can be pasted. Without it the
+  dictation records, transcribes and polishes, then nothing appears.
+
+Both are in System Settings → Privacy & Security, and both are only re-read at
+launch, so quit and reopen the app after granting.
+
+### The part that will waste your evening
+
+macOS ties these grants to the binary's code signature, and `tauri dev`
+produces an **ad-hoc signature that changes on every rebuild**. So a grant you
+made ten minutes ago stops applying the moment you recompile — the entry still
+sits in the list looking enabled while doing nothing.
+
+Worse, permissions are attributed to the *responsible process*, which for a dev
+build is whatever launched it: your terminal, or your editor if you started it
+from there. Granting "naxvoice" does nothing if the thing macOS is actually
+asking about is Terminal.
+
+Two ways to stay sane:
+
+1. For real use, run `npm run tauri build`, then **re-sign the bundle** before
+   installing it — Tauri's output has a malformed signature (`spctl` reports
+   "code has no resources but signature indicates they must be present") and
+   macOS will not reliably honour grants for it:
+
+   ```bash
+   cp -R src-tauri/target/release/bundle/macos/naxvoice.app /Applications/
+   codesign --force --deep --sign - /Applications/naxvoice.app
+   codesign --verify --deep --strict /Applications/naxvoice.app   # expect "valid on disk"
+   ```
+
+   Then launch it from Finder, not a terminal, and grant it once.
+
+2. For development, expect to re-grant after rebuilds, and remove the stale
+   entry with **–** before re-adding it. Toggling the switch off and on is not
+   enough.
 
 **In dev, grant it to your terminal, not to naxvoice.** Under `tauri dev` the
 binary is a bare, ad-hoc-signed executable with no `.app` bundle, so macOS

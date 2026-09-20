@@ -41,10 +41,19 @@ export default function Status() {
       <Head state={snapshot.state} />
 
       <div className="tiles">
+        {/* Mostly a fixed cost, not a per-dictation one: chunks transcribe
+            while you speak, so on release only the tail is left. Cleanup and
+            the deliberate waits dominate. Measured here: a 70-word dictation
+            came back in 1926ms and a 3-word one took 4433ms. Saying "median"
+            alone made it read as though long dictations were slow. */}
         <Tile
           k="Round trip"
           v={snapshot.round_trip_ms ? `${snapshot.round_trip_ms}ms` : "—"}
-          s={snapshot.round_trip_ms ? "median, last 24 hours" : "nothing recorded yet"}
+          s={
+            snapshot.round_trip_ms
+              ? "median from release to text · mostly fixed, not per word"
+              : "nothing recorded yet"
+          }
         />
         <Tile
           k="Words spoken"
@@ -55,10 +64,14 @@ export default function Status() {
               : "nothing recorded yet"
           }
         />
+        {/* Spend is never populated: nothing reads OpenRouter's credit
+            endpoint. The old subtitle said "needs an OpenRouter key", which
+            blamed a missing key for a feature that was never built — and read
+            as an error to anyone who had a key working perfectly well. */}
         <Tile
           k="Spend"
           v={snapshot.spend ?? "—"}
-          s={snapshot.spend ? "this month" : "needs an OpenRouter key"}
+          s={snapshot.spend ? "this month" : "not tracked yet"}
         />
       </div>
 

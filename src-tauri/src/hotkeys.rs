@@ -327,8 +327,17 @@ async fn run_session<R: Runtime>(app: AppHandle<R>, mut events: UnboundedReceive
         return;
     }
 
-    // The number CLAUDE.md's budget is written against: release to text on
-    // screen. Anything over ~800ms median means something regressed.
+    // Release to text on screen. CLAUDE.md budgets ~800ms, which predates
+    // cleanup sitting in this path and is not reachable with it enabled:
+    // cleanup alone measures ~2.2s. Real medians on this machine are 1.9-5.0s,
+    // and length barely moves them — 70 words returned in 1926ms while a
+    // 3-word dictation took 4433ms, because chunks transcribe while you speak
+    // and only the tail is left at release. What dominates is cleanup plus
+    // roughly 0.7s of deliberate waiting: the latch window before a session
+    // can finish, and the paste settling in platform/darwin.rs.
+    //
+    // So treat a rise here as a cleanup or network regression, not a
+    // transcription one, and do not compare it against 800ms.
     let round_trip = released.elapsed().as_millis();
     tracing::info!(ms = round_trip, chars = text.len(), "release to pasted");
 

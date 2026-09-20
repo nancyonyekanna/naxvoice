@@ -1,8 +1,13 @@
 # naxvoice
 
-System-wide dictation and read-aloud for macOS and Windows. Hold a key and speak,
-polished text lands at your cursor. Select any text, press a key, hear it read back
-in a voice you chose.
+System-wide dictation and read-aloud. Hold a key and speak, polished text lands at
+your cursor. Select any text, press a key, hear it read back in a voice you chose.
+
+**macOS only, today.** Windows is designed for and partly written — the clipboard,
+paste and foreground-window code are all there — but the dictation key itself is
+not: watching a bare modifier needs a low-level keyboard hook, and
+`platform/win32.rs` says so with an explicit `bail!` rather than failing quietly.
+Until that lands, the key will never fire on Windows. Help welcome.
 
 Transcription and cleanup run through OpenRouter on one API key. Speech synthesis
 runs locally, so reading is unlimited and works offline.
