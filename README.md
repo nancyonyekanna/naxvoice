@@ -73,9 +73,24 @@ src/                  React dashboard
   lib/                Tauri IPC bindings
 ```
 
-## Setup
+## Install
 
-Prerequisites: Rust stable, Node 20+, and the Tauri prerequisites for your
+```bash
+git clone https://github.com/YOURUSER/naxvoice.git
+cd naxvoice
+./install.sh
+```
+
+Checks what you need, downloads the speech model, builds, signs and installs to
+`/Applications`. Safe to re-run. Then grant two permissions, which no script can
+do for you.
+
+**[INSTALL.md](INSTALL.md)** has the manual steps, what each permission is for,
+and what to do when something does not work.
+
+## Setup for development
+
+Prerequisites: Rust stable, Node 20+, cmake, and the Tauri prerequisites for your
 platform (Xcode CLT on macOS, MSVC build tools + WebView2 on Windows).
 
 ```bash
