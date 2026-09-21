@@ -28,6 +28,7 @@ mod hotkeys;
 mod overlay;
 mod platform;
 mod secrets;
+mod spend;
 #[allow(dead_code)]
 mod stt;
 #[allow(dead_code)]
@@ -93,7 +94,8 @@ fn run() -> Result<()> {
             dashboard::clear_api_key,
             dashboard::preview_cleanup,
             dashboard::history_recent,
-            dashboard::clear_history
+            dashboard::clear_history,
+            dashboard::clear_spend
         ])
         .setup(move |app| {
             // Held in managed state so the shortcut handler, which only ever

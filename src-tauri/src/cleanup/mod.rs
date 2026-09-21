@@ -60,6 +60,23 @@ struct Message<'a> {
 #[derive(Serialize, Deserialize)]
 struct ChatResponse {
     choices: Vec<Choice>,
+    #[serde(default)]
+    usage: Option<Usage>,
+}
+
+/// What the call cost. OpenRouter returns this on every chat completion without
+/// being asked, so unlike transcription there is no provider that might omit it.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct Usage {
+    #[serde(default)]
+    pub cost: Option<f64>,
+}
+
+/// A cleaned transcript and what it cost.
+pub struct Polished {
+    pub text: String,
+    /// `None` when the response carried no price, which is not the same as free.
+    pub cost: Option<f64>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -82,12 +99,26 @@ impl CleanupClient {
         Ok(Self { http, base_url, api_key, default_model, max_tokens })
     }
 
+    /// The cleaned text, discarding the price.
+    ///
+    /// Kept because the dashboard's profile preview wants the text and nothing
+    /// else, and a preview is not a dictation: charging it to the ledger would
+    /// put spending on the Status screen that no dictation caused.
     pub async fn polish(
         &self,
         transcript: &str,
         profile: &Profile,
         dictionary: &[DictionaryTerm],
     ) -> Result<String> {
+        Ok(self.polish_priced(transcript, profile, dictionary).await?.text)
+    }
+
+    pub async fn polish_priced(
+        &self,
+        transcript: &str,
+        profile: &Profile,
+        dictionary: &[DictionaryTerm],
+    ) -> Result<Polished> {
         let system = build_system_prompt(profile, dictionary);
         let model = profile.model.as_deref().unwrap_or(&self.default_model);
 
@@ -104,6 +135,8 @@ impl CleanupClient {
             .http
             .post(format!("{}/chat/completions", self.base_url))
             .bearer_auth(&self.api_key)
+            .header("HTTP-Referer", crate::stt::openrouter::APP_URL)
+            .header("X-Title", crate::stt::openrouter::APP_TITLE)
             .json(&body)
             .send()
             .await
@@ -114,12 +147,14 @@ impl CleanupClient {
         }
 
         let parsed: ChatResponse = res.json().await?;
-        parsed
+        let cost = parsed.usage.and_then(|u| u.cost);
+        let text = parsed
             .choices
             .into_iter()
             .next()
             .map(|c| c.message.content.trim().to_string())
-            .context("empty cleanup response")
+            .context("empty cleanup response")?;
+        Ok(Polished { text, cost })
     }
 }
 

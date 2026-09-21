@@ -64,14 +64,15 @@ export default function Status() {
               : "nothing recorded yet"
           }
         />
-        {/* Spend is never populated: nothing reads OpenRouter's credit
-            endpoint. The old subtitle said "needs an OpenRouter key", which
-            blamed a missing key for a feature that was never built — and read
-            as an error to anyone who had a key working perfectly well. */}
+        {/* naxvoice's own spending, from the local ledger, never the
+            OpenRouter account total. One key is usually shared with other
+            tools, so the account figure would report spending this app never
+            did. Read-aloud is absent from it because Kokoro runs on this
+            machine and costs nothing. */}
         <Tile
           k="Spend"
-          v={snapshot.spend ?? "—"}
-          s={snapshot.spend ? "this month" : "not tracked yet"}
+          v={money(snapshot.spend?.all)}
+          s={spendNote(snapshot.spend)}
         />
       </div>
 
@@ -103,6 +104,25 @@ function Head({ state }) {
       <span className="pill">{state}</span>
     </div>
   );
+}
+
+// One dictation costs a fraction of a cent, so a flat two decimal places would
+// print almost every real figure as "$0.00". Precision grows as the amount
+// shrinks, which keeps small totals legible without padding large ones.
+function money(amount) {
+  const n = Number(amount) || 0;
+  if (n >= 1) return `$${n.toFixed(2)}`;
+  if (n >= 0.01) return `$${n.toFixed(3)}`;
+  return `$${n.toFixed(4)}`;
+}
+
+function spendNote(spend) {
+  if (!spend || !spend.all) return "nothing spent yet";
+  // "at least" rather than a figure that reads as exact: a provider that
+  // returns no price leaves the ledger unable to account for that call, and
+  // counting it as zero would understate the total silently.
+  const floor = spend.partial ? "at least " : "";
+  return `${floor}${money(spend.day)} last 24 hours, ${money(spend.month)} last 30 days`;
 }
 
 function Tile({ k, v, s }) {

@@ -206,6 +206,14 @@ fn stop_recording<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
+/// One chunk's transcript and what it cost.
+struct Transcribed {
+    text: String,
+    /// `None` when the provider returned no price, which is not the same as
+    /// free: it means this chunk cannot be accounted for.
+    cost: Option<f64>,
+}
+
 /// One dictation session: every segment, transcribed, reassembled, polished once
 /// and pasted once.
 async fn run_session<R: Runtime>(app: AppHandle<R>, mut events: UnboundedReceiver<SessionEvent>) {
@@ -234,7 +242,7 @@ async fn run_session<R: Runtime>(app: AppHandle<R>, mut events: UnboundedReceive
         released
     });
 
-    let (results_tx, mut results_rx) = unbounded_channel::<(usize, Result<String>)>();
+    let (results_tx, mut results_rx) = unbounded_channel::<(usize, Result<Transcribed>)>();
     let client = app.state::<crate::Stt>().0.as_ref().cloned();
     let bias = bias_terms(&app);
     let mut dispatched = 0usize;
@@ -253,7 +261,11 @@ async fn run_session<R: Runtime>(app: AppHandle<R>, mut events: UnboundedReceive
         tauri::async_runtime::spawn(async move {
             let sent = Instant::now();
             let outcome = match chunk_to_wav(&chunk.samples) {
-                Ok(wav) => client.transcribe(wav, AudioFormat::Wav, &bias).await.map(|r| r.text),
+                Ok(wav) => client.transcribe(wav, AudioFormat::Wav, &bias).await.map(|r| {
+                    // Read before the move: `cost()` borrows, `text` consumes.
+                    let cost = r.cost();
+                    Transcribed { text: r.text, cost }
+                }),
                 Err(e) => Err(e),
             };
             tracing::debug!(index, ms = sent.elapsed().as_millis(), "chunk transcribed");
@@ -279,10 +291,19 @@ async fn run_session<R: Runtime>(app: AppHandle<R>, mut events: UnboundedReceive
 
     let mut stitcher = Stitcher::new();
     let mut failed = 0usize;
+    // Transcription cost, summed as chunks come back. A chunk that succeeded
+    // without a price cannot be counted, and is flagged rather than treated as
+    // free. Failed chunks are not billed, so they do not make the total a floor.
+    let mut stt_cost = 0.0f64;
+    let mut stt_unpriced = false;
     while let Some((index, outcome)) = results_rx.recv().await {
         match outcome {
-            Ok(text) => {
-                stitcher.resolve(index, text);
+            Ok(chunk) => {
+                match chunk.cost {
+                    Some(cost) => stt_cost += cost,
+                    None => stt_unpriced = true,
+                }
+                stitcher.resolve(index, chunk.text);
             }
             Err(e) => {
                 // Resolve as empty rather than skipping: the stitcher only emits
@@ -309,8 +330,8 @@ async fn run_session<R: Runtime>(app: AppHandle<R>, mut events: UnboundedReceive
         return;
     }
 
-    let text = match finish_text(&app, &transcript).await {
-        Ok(text) => text,
+    let (text, cleanup_cost) = match finish_text(&app, &transcript).await {
+        Ok(finished) => finished,
         Err(e) => {
             tracing::error!(error = format!("{e:#}"), "dictation failed");
             crate::overlay::hide(&app);
@@ -354,6 +375,14 @@ async fn run_session<R: Runtime>(app: AppHandle<R>, mut events: UnboundedReceive
         let into = target.map(|t| t.app).unwrap_or_else(|| "unknown".into());
         crate::history::append(&into, &transcript, &text, round_trip as u64, dispatched);
     }
+
+    // Recorded whatever history is set to, and into a separate file. What you
+    // said and what you paid are two different decisions: switching off the
+    // transcript log, or deleting it, should not stop the app accounting for
+    // its own cost.
+    let cleanup_enabled = app.state::<Config>().cleanup.enabled;
+    let partial = stt_unpriced || (cleanup_enabled && cleanup_cost.is_none());
+    crate::spend::record(stt_cost, cleanup_cost.unwrap_or(0.0), partial);
 }
 
 fn bias_terms<R: Runtime>(app: &AppHandle<R>) -> Vec<String> {
@@ -368,17 +397,26 @@ fn bias_terms<R: Runtime>(app: &AppHandle<R>) -> Vec<String> {
 }
 
 /// Applies cleanup unless it is switched off in config.
-async fn finish_text<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<String> {
+///
+/// Returns the text and what cleanup cost. The cost is `None` when no billable
+/// call was made, or when the response carried no price.
+async fn finish_text<R: Runtime>(
+    app: &AppHandle<R>,
+    transcript: &str,
+) -> Result<(String, Option<f64>)> {
     let enabled = app.state::<Config>().cleanup.enabled;
     if !enabled {
         tracing::debug!("cleanup is disabled in config, pasting the raw transcript");
-        return Ok(transcript.to_string());
+        return Ok((transcript.to_string(), None));
     }
     polish_transcript(app, transcript).await
 }
 
 /// Rewrites the transcript into what the speaker would have typed.
-async fn polish_transcript<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<String> {
+async fn polish_transcript<R: Runtime>(
+    app: &AppHandle<R>,
+    transcript: &str,
+) -> Result<(String, Option<f64>)> {
     // Cloned out before the await, so no state guard is held across it.
     let (profile, dictionary, offline) = {
         let config = app.state::<Config>();
@@ -391,16 +429,20 @@ async fn polish_transcript<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> 
 
     let Some(client) = app.state::<crate::Cleanup>().0.as_ref().cloned() else {
         tracing::warn!("cleanup is unavailable, pasting the raw transcript");
-        return Ok(transcript.to_string());
+        return Ok((transcript.to_string(), None));
     };
 
     let started = Instant::now();
-    match client.polish(transcript, &profile, &dictionary).await {
-        Ok(polished) => {
-            let polished = polished.trim().to_string();
+    match client.polish_priced(transcript, &profile, &dictionary).await {
+        Ok(priced) => {
+            // The price is carried down every path below. A call that was made
+            // was billed, even where its answer is rejected, so dropping the
+            // cost on the reject paths would under-report the dictation.
+            let cost = priced.cost;
+            let polished = priced.text.trim().to_string();
             if polished.is_empty() {
                 tracing::warn!("cleanup returned nothing, keeping the raw transcript");
-                return Ok(transcript.to_string());
+                return Ok((transcript.to_string(), cost));
             }
 
             // The model sometimes answers the transcript rather than rewriting
@@ -413,7 +455,7 @@ async fn polish_transcript<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> 
                     kept = format!("{kept:.2}"),
                     "cleanup discarded most of what was said, keeping the raw transcript"
                 );
-                return Ok(transcript.to_string());
+                return Ok((transcript.to_string(), cost));
             }
 
             tracing::info!(
@@ -423,11 +465,12 @@ async fn polish_transcript<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> 
                 kept = format!("{kept:.2}"),
                 "polished"
             );
-            Ok(polished)
+            Ok((polished, cost))
         }
         Err(e) => {
             tracing::warn!(error = format!("{e:#}"), "cleanup failed");
-            on_cleanup_failure(offline, transcript)
+            // A failed request is not billed, so there is nothing to record.
+            on_cleanup_failure(offline, transcript).map(|text| (text, None))
         }
     }
 }

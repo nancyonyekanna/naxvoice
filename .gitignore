@@ -18,3 +18,7 @@ models/
 # it with include_bytes! and the build fails without it.
 src-tauri/assets/kokoro*.onnx
 src-tauri/assets/*.bin
+
+# Working notes, not part of the published project. Added after LAUNCH.md
+# was swept into a commit by `git add -A` and had to be removed from history.
+LAUNCH.md

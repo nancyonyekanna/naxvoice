@@ -16,6 +16,16 @@ use std::time::Duration;
 
 const ENDPOINT: &str = "/audio/transcriptions";
 
+/// How naxvoice identifies itself to OpenRouter.
+///
+/// Without these two headers every request is anonymous, which means an account
+/// that shares one key between several tools cannot tell afterwards which of
+/// them spent what. The local ledger in `spend.rs` is what the Status screen
+/// reads, but these make the same split visible in OpenRouter's own activity
+/// dashboard, which is a useful independent check on our arithmetic.
+pub const APP_URL: &str = "https://github.com/nancyonyekanna/naxvoice";
+pub const APP_TITLE: &str = "naxvoice";
+
 /// How the uploaded audio is labelled.
 ///
 /// This matters more than it looks. OpenRouter derives the codec from the
@@ -60,6 +70,17 @@ pub struct Usage {
     pub seconds: Option<f64>,
     #[serde(default)]
     pub cost: Option<f64>,
+}
+
+impl TranscriptionResponse {
+    /// What this chunk cost, when the provider priced it.
+    ///
+    /// `None` is not zero. A provider that returns no price leaves the ledger
+    /// unable to account for this chunk, and `spend.rs` records that as a floor
+    /// rather than pretending the chunk was free.
+    pub fn cost(&self) -> Option<f64> {
+        self.usage.as_ref().and_then(|u| u.cost)
+    }
 }
 
 pub struct SttClient {
@@ -141,6 +162,8 @@ impl SttClient {
             .http
             .post(format!("{}{}", self.base_url, ENDPOINT))
             .bearer_auth(&self.api_key)
+            .header("HTTP-Referer", APP_URL)
+            .header("X-Title", APP_TITLE)
             .multipart(form)
             .send()
             .await

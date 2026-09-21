@@ -4,12 +4,15 @@
 //! and it is not open while anything is being dictated. The parking discipline
 //! in `overlay.rs` exists to protect the paste target and does not apply here.
 //!
-//! **Nothing here invents a number.** DESIGN.md's status screen wants a 7-day
-//! median round trip, words dictated today and monthly spend. None of those are
-//! recorded anywhere yet — there is no history store — so they are reported as
-//! absent and the screen renders a dash. A plausible-looking figure on a status
-//! screen is worse than an obvious gap, because it cannot be told from a real
-//! one.
+//! **Nothing here invents a number.** Every figure comes from a store on disk:
+//! the round trip and the word count from `history.rs`, and what has been spent
+//! from `spend.rs`. Where a store has nothing to say, the screen says so. A
+//! plausible-looking figure on a status screen is worse than an obvious gap,
+//! because it cannot be told apart from a real one.
+//!
+//! Spend is this app's own, never the account's. One OpenRouter key is usually
+//! shared with other tools, so the account-wide total would put spending on
+//! naxvoice's dashboard that naxvoice never did.
 
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -39,7 +42,7 @@ pub struct Snapshot {
     round_trip_ms: Option<u64>,
     words_today: Option<u64>,
     dictations_today: Option<u64>,
-    spend: Option<String>,
+    spend: crate::spend::Totals,
     engines: Vec<Engine>,
     warnings: Vec<String>,
 }
@@ -96,6 +99,14 @@ pub fn history_recent(limit: usize) -> Vec<crate::history::Record> {
 #[tauri::command]
 pub fn clear_history() -> Result<(), String> {
     crate::history::clear().map_err(|e| format!("{e:#}"))
+}
+
+/// Wipes the spending ledger. Separate from `clear_history` on purpose: erasing
+/// what you said and erasing what you paid are different intentions, and one
+/// button doing both would destroy a record the user meant to keep.
+#[tauri::command]
+pub fn clear_spend() -> Result<(), String> {
+    crate::spend::clear().map_err(|e| format!("{e:#}"))
 }
 
 /// Runs a sample transcript through a profile, without saving anything.
@@ -233,9 +244,9 @@ pub fn status_snapshot(app: AppHandle) -> Snapshot {
         round_trip_ms: stats.median_ms,
         words_today: (stats.dictations > 0).then_some(stats.words),
         dictations_today: (stats.dictations > 0).then_some(stats.dictations),
-        // Still absent: nothing reads OpenRouter's credit endpoint, and a
-        // plausible number here could not be told from a real one.
-        spend: None,
+        // Not gated on history.keep: the ledger is a separate file, so a user
+        // who keeps no transcripts still gets an honest account of the cost.
+        spend: crate::spend::totals(),
         engines,
         warnings,
     }
