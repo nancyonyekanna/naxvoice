@@ -88,16 +88,18 @@ faster and checks exactly the code that can't be compiled in-tree.
 
 The Tauri shell is committed — `src-tauri/Cargo.toml`, `tauri.conf.json`,
 `build.rs`, `capabilities/` and the icons are already in the repo, so there is
-no generator to run. There is no React app yet either; it arrives at build step
-8, and until then `ui/index.html` is a placeholder that gives Tauri a frontend
-directory to point at.
+no generator to run. The React dashboard is committed too: `index.html` at the
+repository root is the Vite entry point and loads `src/main.jsx`. There is no
+`ui/` directory; an earlier version of this file said there was.
 
 ```bash
 npm install
 ```
 
-That installs one package, the Tauri CLI, which is what `npm run tauri dev`
-uses.
+That installs React, Vite and the Tauri CLI, which is what `npm run tauri dev`
+uses. Vite is pinned to port 1420 with `strictPort`, because `tauri.conf.json`
+names that exact port in `devUrl`, and a silent fallback to a free port shows up
+as a blank window rather than as an error.
 
 `src-tauri/Cargo.toml` carries only what the code in the tree actually calls.
 `ort`, `num2words`, `thiserror` and `tauri-plugin-stronghold` are listed there in
@@ -283,15 +285,23 @@ on the second machine.
 ## 9. Hand it to Claude Code
 
 ```bash
-cd ~/Documents/naxvoice
+cd naxvoice
 claude
 ```
 
 Then:
 
-> Read CLAUDE.md, README.md and DESIGN.md. Start at build step 1.
+> Read CLAUDE.md, README.md and DESIGN.md before changing anything.
 
-`CLAUDE.md` carries the build order, the architectural rules and the latency
-budget, so it will pick up where the scaffold stops rather than redesigning it.
-If it proposes skipping ahead or keeping the batch path alongside chunking at
-step 5, stop it — both are called out in CLAUDE.md as mistakes.
+`CLAUDE.md` carries the architectural rules, what is built, and what is
+scaffolded but inert. Do not start at build step 1: the list there is a record
+of how this was built, not a plan to follow. Steps 1-6 and 8 are done, and step
+7 was measured and abandoned.
+
+Two features have config keys and no implementation — speculative cleanup and
+Opus upload. Treat either as unbuilt rather than broken, and do not let a
+description of them creep back into the docs; that is how the README came to
+advertise a 600ms latency it had never measured.
+
+The one substantial thing left is Windows. `platform/win32.rs` bails explicitly
+on watching a bare modifier key, so dictation never fires there.
