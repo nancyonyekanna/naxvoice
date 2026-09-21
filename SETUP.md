@@ -6,7 +6,7 @@ GitHub, then clone on the second.
 ## 1. Get it
 
 ```bash
-git clone https://github.com/YOURUSER/naxvoice.git
+git clone https://github.com/nancyonyekanna/naxvoice.git
 cd naxvoice
 ```
 
@@ -246,11 +246,19 @@ Absence of that line means the paste will work.
 git init
 git add .
 git commit -m "Scaffold: core modules, design spec, build plan"
-gh repo create naxvoice --public --source=. --push
+gh repo create naxvoice --private --source=. --push
 ```
 
-Public from the first commit. A repo that appears fully formed in one commit
-reads as generated; a real commit history reads as built.
+Private first, so you can read it over before anyone else can. Flip it when you
+are satisfied:
+
+```bash
+gh repo edit --visibility public --accept-visibility-change-consequences
+```
+
+Either way, commit as you go rather than squashing at the end. A repo that
+appears fully formed in one commit reads as generated; a real commit history
+reads as built.
 
 Before pushing, confirm nothing sensitive is staged:
 
@@ -262,7 +270,7 @@ grep -r "sk-or-" . --exclude-dir=.git --exclude-dir=node_modules || echo "clean"
 ## 8. Second machine
 
 ```bash
-git clone git@github.com:YOURUSER/naxvoice.git
+git clone git@github.com:nancyonyekanna/naxvoice.git
 cd naxvoice
 npm install
 cp config.example.yaml config.yaml

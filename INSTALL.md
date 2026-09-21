@@ -6,7 +6,7 @@ there — see `platform/win32.rs`.
 ## The short way
 
 ```bash
-git clone https://github.com/YOURUSER/naxvoice.git
+git clone https://github.com/nancyonyekanna/naxvoice.git
 cd naxvoice
 ./install.sh
 ```
