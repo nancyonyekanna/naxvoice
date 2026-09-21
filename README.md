@@ -177,4 +177,13 @@ is not written.
 
 ## License
 
-MIT
+The code written for this project is MIT — see [LICENSE](LICENSE).
+
+It is not MIT all the way down. The repository redistributes eSpeak NG's data
+files, which are **GPL-3.0-or-later**, and the build links eSpeak NG itself, so
+a *compiled* naxvoice carries GPL-3.0-or-later obligations even though its own
+source does not. The Silero VAD model is MIT and the Kokoro weights and
+tokenizer are Apache-2.0.
+
+[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) lists each component, where
+it lives in the tree, and what that means if you distribute a build.

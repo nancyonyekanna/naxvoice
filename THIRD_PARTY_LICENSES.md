@@ -1,0 +1,47 @@
+# Third-party licenses
+
+naxvoice's own source code is MIT (see [LICENSE](LICENSE)). It ships and builds
+against components that are **not** MIT, and this file says which, because the
+MIT file alone would imply terms this project cannot grant.
+
+This is a plain summary of what is in the tree, not legal advice.
+
+## Redistributed in this repository
+
+| Component | Path | License |
+|---|---|---|
+| eSpeak NG data (phoneme tables, English dictionary, `lang/gmw`, voice variants) | `src-tauri/resources/espeak-ng-data/**` | **GPL-3.0-or-later** |
+| Silero VAD model | `src-tauri/assets/silero_vad_16k_op15.onnx` | MIT |
+| Kokoro tokenizer | `src-tauri/resources/tokenizer.json` | Apache-2.0 |
+
+The eSpeak NG data is a trimmed copy of the upstream `espeak-ng-data`
+directory, committed because the build runs with `default-features = false` and
+therefore never generates it (SETUP.md explains why). It is
+GPL-3.0-or-later, copyright the eSpeak NG contributors:
+<https://github.com/espeak-ng/espeak-ng>.
+
+The Silero VAD model is compiled into the binary with `include_bytes!` in
+`src-tauri/src/audio/vad.rs`. MIT, copyright Silero Team:
+<https://github.com/snakers4/silero-vad>.
+
+## Downloaded at install time, not committed
+
+| Component | License |
+|---|---|
+| Kokoro-82M v1.0 ONNX weights and the `af_heart` voice pack | Apache-2.0 |
+
+`install.sh` fetches these from
+<https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX>.
+
+## What this means if you build it
+
+`src-tauri/Cargo.toml` depends on `espeak-rs`, which compiles eSpeak NG's
+vendored C source. **A compiled naxvoice binary therefore links GPL-3.0-or-later
+code.** Building it for yourself is unencumbered, but if you distribute a built
+binary — a release, a `.app`, a package — you are distributing a combined work
+that carries GPL-3.0-or-later obligations, including offering corresponding
+source under those terms.
+
+The MIT grant in `LICENSE` covers the code written for this project: everything
+under `src-tauri/src/`, `src/`, the build scripts and the documentation. It does
+not, and cannot, relicense the components above.

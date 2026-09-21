@@ -30,7 +30,9 @@ Landing screen. Answers "is it working and what is it costing me."
 **Header** — app name, machine name, and one status pill: ready / degraded / offline.
 
 **Three metric tiles**
-- Round trip, 7-day median, in ms. The number that matters.
+- Round trip, median, in ms. The number that matters. (Built over a 24-hour
+  window, not the 7 days first specified: the history store is capped at a
+  thousand records, so a shorter window is the one that stays honest.)
 - Words today, with dictation count underneath.
 - Spend this month, pulled from OpenRouter.
 
@@ -62,7 +64,10 @@ its name: "deepgram/nova-3 · fastest", "openai/whisper-large-v3 · most accurat
 tool feels fast or feels broken, so they are exposed rather than buried.
 - Pause threshold, slider, 200-1200ms, default 450
 - Chunk overlap, slider, 0-500ms, default 200
-- Audio, select: Opus 24kbps (recommended) / WAV 16kHz
+- ~~Audio, select: Opus 24kbps (recommended) / WAV 16kHz~~ — not built. Capture
+  writes 16kHz mono WAV and there is nothing to choose between, so the control
+  would be a lie. `AudioFormat::Opus` is reserved for when chunk payload size
+  starts to matter.
 
 Helper line under the sliders: lower threshold sends sooner but risks cutting
 mid-thought.
