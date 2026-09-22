@@ -62,8 +62,12 @@ HF=https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main
 mkdir -p "$ASSETS"
 
 # Not committed: 88MB is too large for a git repo, and it is redistributable
-# from source. Read-aloud reports the missing path rather than failing
-# obscurely, but it will not speak without these.
+# from source.
+#
+# These are bundled into the .app now, via bundle.resources in
+# tauri.conf.json, so the build depends on them being here. A missing weight is
+# a build failure rather than an app that installs cleanly and then cannot
+# speak, which is the better way round to find out.
 fetch() {
   local url="$1" dest="$2" name="$3"
   if [ -s "$dest" ]; then ok "$name already present"; return; fi
@@ -110,19 +114,29 @@ ok "app bundle built"
 # ----------------------------------------------------------------------- install
 bold "Installing"
 
-# Signed after the copy, at its final path. Tauri's own bundle fails
-# verification ("code has no resources but signature indicates they must be
-# present"), and macOS will not reliably honour Accessibility or Input
-# Monitoring grants for a bundle whose signature does not validate. This is
-# the single step that turns a mysteriously dead app into a working one.
+# Checked rather than re-signed. Tauri signs the bundle itself now
+# (bundle.macOS.signingIdentity is "-"), and that signature verifies, where the
+# old linker-signed one failed with "code has no resources but signature
+# indicates they must be present".
+#
+# Re-signing unconditionally would now do harm. macOS ties Accessibility and
+# Input Monitoring to the signature, so replacing a good one with a freshly
+# generated one is exactly how grants lapse without anyone touching the
+# settings. The fallback stays for a bundle that somehow arrives unverified.
 pkill -f "/Applications/naxvoice.app" 2>/dev/null || true
 sleep 1
 rm -rf /Applications/naxvoice.app
 cp -R src-tauri/target/release/bundle/macos/naxvoice.app /Applications/
-codesign --force --deep --sign - /Applications/naxvoice.app
-codesign --verify --deep --strict /Applications/naxvoice.app 2>/dev/null \
-  && ok "installed and signed" \
-  || die "the signature did not verify; permissions would silently fail"
+
+if codesign --verify --deep --strict /Applications/naxvoice.app 2>/dev/null; then
+  ok "installed, and the bundled signature verifies"
+else
+  warn "the bundled signature did not verify; re-signing ad-hoc as a fallback"
+  codesign --force --deep --sign - /Applications/naxvoice.app
+  codesign --verify --deep --strict /Applications/naxvoice.app 2>/dev/null \
+    || die "the signature still does not verify; permissions would silently fail"
+  ok "installed and re-signed"
+fi
 
 # ------------------------------------------------------------------ what is left
 cat <<'EOF'

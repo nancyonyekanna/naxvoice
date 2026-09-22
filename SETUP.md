@@ -182,16 +182,22 @@ asking about is Terminal.
 
 Two ways to stay sane:
 
-1. For real use, run `npm run tauri build`, then **re-sign the bundle** before
-   installing it — Tauri's output has a malformed signature (`spctl` reports
-   "code has no resources but signature indicates they must be present") and
-   macOS will not reliably honour grants for it:
+1. For real use, run `npm run tauri build` and install the bundle. It signs
+   itself now, through `bundle.macOS.signingIdentity` in `tauri.conf.json`, and
+   that signature verifies:
 
    ```bash
    cp -R src-tauri/target/release/bundle/macos/naxvoice.app /Applications/
-   codesign --force --deep --sign - /Applications/naxvoice.app
-   codesign --verify --deep --strict /Applications/naxvoice.app   # expect "valid on disk"
+   codesign --verify --deep --strict /Applications/naxvoice.app   # expect silence
    ```
+
+   **Do not re-sign it.** Earlier versions of this file told you to run
+   `codesign --force --deep --sign -`, because Tauri's output used to fail
+   verification with "code has no resources but signature indicates they must
+   be present". That is fixed at the source now. Running it anyway generates a
+   *different* signature, and since macOS ties the grants to the signature,
+   that is simply one more way to lose the permissions this section exists to
+   protect.
 
    Then launch it from Finder, not a terminal, and grant it once.
 

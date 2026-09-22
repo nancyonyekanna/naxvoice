@@ -18,10 +18,13 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app"],
+    "targets": ["app", "dmg"],
     "resources": [
       "resources/tokenizer.json",
-      "resources/espeak-ng-data/**/*"
+      "resources/espeak-ng-data/**/*",
+      "resources/licenses/*",
+      "assets/kokoro-v1.0.quantized.onnx",
+      "assets/af_heart.bin"
     ],
     "icon": [
       "icons/32x32.png",
@@ -31,7 +34,9 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "minimumSystemVersion": "10.15"
+      "minimumSystemVersion": "10.15",
+      "signingIdentity": "-",
+      "hardenedRuntime": false
     }
   }
 }

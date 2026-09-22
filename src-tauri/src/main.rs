@@ -29,6 +29,58 @@ mod overlay;
 mod platform;
 mod secrets;
 mod spend;
+
+/// Where the speech files live, bundled or not.
+///
+/// `Kokoro::from_project_layout` resolves against `CARGO_MANIFEST_DIR`, which
+/// is the path of the machine the binary was *compiled* on. That is right for a
+/// dev build and meaningless on a stranger's Mac, so a bundled app has to look
+/// inside itself instead. Tauri copies `bundle.resources` into
+/// `Contents/Resources/` keeping the relative path, so `resources/...` lands at
+/// `Contents/Resources/resources/...` and the weights at
+/// `Contents/Resources/assets/`.
+///
+/// Presence decides, not a build flag. The bundled copy is used when the file
+/// is actually there; otherwise the crate layout is, so a dev build with no
+/// weights downloaded still reports the project path that SETUP.md tells you to
+/// fix, rather than a path inside an app bundle nobody can act on.
+///
+/// The environment overrides keep priority over both, because running two
+/// profiles side by side is what they exist for.
+fn speech_dirs<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> (std::path::PathBuf, std::path::PathBuf) {
+    use tauri::Manager as _;
+
+    let crate_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let bundled = app.path().resource_dir().ok();
+
+    let pick = |env_key: &str, sub: &str, probe: &str, dev: std::path::PathBuf| {
+        if let Some(explicit) = std::env::var_os(env_key) {
+            return std::path::PathBuf::from(explicit);
+        }
+        if let Some(root) = &bundled {
+            let candidate = root.join(sub);
+            if candidate.join(probe).exists() {
+                return candidate;
+            }
+        }
+        dev
+    };
+
+    (
+        pick(
+            tts::kokoro::RESOURCES_ENV,
+            "resources",
+            "tokenizer.json",
+            crate_dir.join("resources"),
+        ),
+        pick(
+            tts::kokoro::MODELS_ENV,
+            "assets",
+            "kokoro-v1.0.quantized.onnx",
+            crate_dir.join("assets"),
+        ),
+    )
+}
 #[allow(dead_code)]
 mod stt;
 #[allow(dead_code)]
@@ -187,7 +239,12 @@ fn run() -> Result<()> {
             // the engine is constructed eagerly but loads lazily: a missing
             // model should be an error when you press the key, naming the path,
             // not a failure to launch.
-            let kokoro = std::sync::Arc::new(tts::kokoro::Kokoro::from_project_layout());
+            let (speech_resources, speech_models) = speech_dirs(app.handle());
+            let kokoro = std::sync::Arc::new(tts::kokoro::Kokoro::new(
+                speech_resources,
+                speech_models,
+                "kokoro-v1.0.quantized.onnx",
+            ));
             tracing::info!(model = %kokoro.model_path().display(), "read-aloud engine");
 
             // Loaded now rather than on the first key press. Measured: a cold

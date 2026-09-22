@@ -133,6 +133,12 @@ Checks what you need, downloads the speech model, builds, signs and installs to
 `/Applications`. Safe to re-run. Then grant two permissions, which no script can
 do for you.
 
+**Apple Silicon only.** The build and the disk image are `aarch64`. No Intel or
+universal build has been produced or tested, so this says nothing about whether
+one would work. The app is ad-hoc signed and not notarised, so macOS will refuse
+it the first time and you have to allow it explicitly in System Settings under
+Privacy and Security.
+
 **[INSTALL.md](INSTALL.md)** has the manual steps, what each permission is for,
 and what to do when something does not work.
 

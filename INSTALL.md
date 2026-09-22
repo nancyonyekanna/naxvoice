@@ -67,15 +67,19 @@ npm install
 npm run tauri build
 
 cp -R src-tauri/target/release/bundle/macos/naxvoice.app /Applications/
-codesign --force --deep --sign - /Applications/naxvoice.app
 codesign --verify --deep --strict /Applications/naxvoice.app   # expect silence
 ```
 
-**The re-sign is not optional.** Tauri's bundle fails verification — `spctl`
-reports *"code has no resources but signature indicates they must be present"* —
-and macOS will not reliably honour permission grants for a bundle whose
-signature does not validate. Skipping this produces an app that looks installed,
-appears in the permission lists, and silently does nothing.
+**Check the signature, do not replace it.** The build signs the bundle itself
+now, and that signature verifies. Earlier versions of this file told you to run
+`codesign --force --deep --sign -` because Tauri's output failed verification
+with *"code has no resources but signature indicates they must be present"*.
+That is fixed at the source, in `tauri.conf.json`.
+
+Re-signing anyway would now cost you something. macOS ties Accessibility and
+Input Monitoring to the signature, so replacing a good one with a newly
+generated one is how those grants lapse while the switches still look enabled.
+Only re-sign if the verify above actually complains.
 
 ## Permissions
 

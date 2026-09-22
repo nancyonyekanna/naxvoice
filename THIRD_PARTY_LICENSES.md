@@ -45,3 +45,28 @@ source under those terms.
 The MIT grant in `LICENSE` covers the code written for this project: everything
 under `src-tauri/src/`, `src/`, the build scripts and the documentation. It does
 not, and cannot, relicense the components above.
+
+## Where the licence texts are
+
+Describing a licence is not the same as conveying it, and GPL-3.0 requires the
+text to travel with the binary. The full texts live in
+`src-tauri/resources/licenses/` and are bundled into the app, so a release
+carries them rather than pointing at a URL that may move:
+
+| File | Covers |
+|---|---|
+| `GPL-3.0.txt` | eSpeak NG, and therefore any distributed naxvoice binary |
+| `Apache-2.0.txt` | Kokoro weights, the `af_heart` voice pack, the tokenizer |
+| `Silero-VAD-MIT.txt` | the embedded Silero VAD model |
+
+Inside an installed app they sit at
+`naxvoice.app/Contents/Resources/resources/licenses/`.
+
+## Corresponding source
+
+GPL-3.0 asks that source for the covered work be available to whoever receives
+the binary. eSpeak NG's own source is at
+<https://github.com/espeak-ng/espeak-ng>, and the exact revision of the data
+files redistributed here is the copy committed under
+`src-tauri/resources/espeak-ng-data/`. naxvoice's own source, including the
+build configuration that links it, is the git tag the release was cut from.
