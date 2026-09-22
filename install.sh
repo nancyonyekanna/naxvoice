@@ -107,7 +107,13 @@ bold "Building"
 npm install --silent
 ok "npm dependencies"
 
-npm run tauri build
+# Only the app bundle. The disk image is a release artifact that this script
+# never installs from, and a dmg packaging failure runs *after* a perfectly good
+# .app already exists, so letting it fail the build would kill an install that
+# does not use a disk image at all. That is the bug commit 04faf5d fixed by
+# disabling the dmg target outright; asking for the one bundle we want keeps
+# releases able to build both.
+npm run tauri build -- --bundles app
 [ -d src-tauri/target/release/bundle/macos/naxvoice.app ] || die "the build produced no app bundle"
 ok "app bundle built"
 

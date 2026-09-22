@@ -83,7 +83,7 @@ shasum -a 256 naxvoice_0.1.0_aarch64.dmg
 ```
 
 ```
-3c9535d6583e0cda8a4d6334687a1274b8de538ab6f7a11b78b7a04ada7ac96e
+c147e22dc426d157fcead3c70a4da1b630dbfdd52f5692d301f7a3be8296cc91
 ```
 
 ## Licence
