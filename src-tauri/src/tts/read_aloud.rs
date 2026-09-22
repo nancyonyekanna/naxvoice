@@ -5,11 +5,15 @@
 //! splitting because it expands abbreviations, and "Dr." would otherwise look
 //! like the end of a sentence to the splitter.
 //!
-//! Units are handed to the player **as each one finishes**, never in a batch.
-//! Synthesis costs roughly 1480ms per spoken second — measured, and flat across
-//! sentence lengths — so a thirty second passage rendered up front would mean
-//! forty-five seconds of silence before the first word. Rendering one unit at a
-//! time gets audio started after the first clause instead.
+//! Units are handed to the player **as each one finishes**, never in a batch,
+//! so what the listener waits for is the opening unit alone. Synthesis costs
+//! roughly 585ms per spoken second, measured in release and flat from 29 to 197
+//! characters, so rendering the whole passage up front would add every later
+//! unit to that wait for no benefit.
+//!
+//! `chunk::split_opening` cuts the opening at its first comma, so audio really
+//! does start after the first clause: 2046ms rather than 2884ms on the self-test
+//! passage below.
 
 use std::sync::Arc;
 
@@ -73,10 +77,12 @@ async fn read_selection_aloud<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
     read_text_aloud(app, &text).await
 }
 
-/// A passage long enough for playback to catch up with synthesis.
+/// A passage long enough to exercise a real read end to end.
 ///
-/// Kokoro renders at about 1480ms per spoken second, so anything beyond a few
-/// sentences will run the queue dry. This exists to make that reproducible.
+/// Written when synthesis was believed to render slower than speech, to make
+/// queue starvation reproducible. At about 585ms per spoken second it no longer
+/// starves on the engine's account, and it is kept because it is the fixed
+/// passage every latency figure in this module refers to.
 pub const SELFTEST_PASSAGE: &str = "\
 The paste target is captured when the key goes down, not when the text is ready. \
 By the time a transcript exists, focus has usually moved somewhere else entirely. \

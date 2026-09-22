@@ -49,14 +49,25 @@ pretending to honour it.
 cheap. Read-aloud is long and repetitive, so local synthesis costs nothing per
 character and keeps working offline.
 
-It is not fast, and it is worth knowing that before you install it. Kokoro renders
-about 1.44× slower than the speech it produces — roughly 1480ms of compute per
-spoken second on an M-series Mac. Measured on a 651-character passage: 9.8 seconds
-before the first word, and 19.2 seconds of inserted silence across a 66.2 second
-read, because playback catches up with synthesis and waits at sentence boundaries.
-CoreML was registered and measured across four lengths and is consistently about
-10% *slower* than the CPU provider; quantisation tiers and thread counts were tried
-too, and none helped. The note at the top of `tts/kokoro.rs` has the numbers.
+What it costs, measured on an M-series Mac in a release build: about 585ms of
+compute per spoken second, roughly 1.7x faster than real time. What you actually
+wait for is the opening unit alone, since everything after it renders while the
+previous unit plays. That opening cost 2884ms as a whole 80-character sentence,
+and 2046ms once cut at its first comma, which is what the code does now.
+
+Earlier versions of this file claimed 1480ms per spoken second and 9.8 seconds
+before the first word. Those are not reproducible and came from a loaded machine.
+Re-measured with two independent harnesses, the rate is flat at 543 to 648ms per
+spoken second between 29 and 197 characters.
+
+Long reads have been observed to pause mid-passage. That observation stands; its
+documented explanation does not, because an engine that outpaces playback cannot
+starve the queue on its own account. The cause is unresolved, and machine load is
+the leading suspect: the identical measurement on a Mac 25GB into swap came back
+20 to 40 times worse. CoreML was measured and is about 10% slower than the CPU
+provider, as were other quantisation tiers and thread counts. Those comparisons
+were taken on the same loaded machine, so their ranking holds but their absolute
+values do not. The note at the top of `tts/kokoro.rs` has the detail.
 
 **One TTS engine.** Kokoro (82M) runs locally and starts speaking after the first
 clause.

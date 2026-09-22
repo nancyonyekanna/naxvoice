@@ -54,22 +54,37 @@ static ESPEAK: OnceLock<Result<(), String>> = OnceLock::new();
 /// test binary, passing cleanly under `--test-threads=1`.
 ///
 /// Serialising costs nothing worth measuring: phonemisation is around 22ms
-/// against roughly 1480ms of synthesis per spoken second.
+/// against roughly 585ms of synthesis per spoken second.
 ///
-/// That figure is the floor on this hardware, not a starting point. CoreML was
-/// registered as an execution provider and measured across four lengths: 1519,
-/// 1559, 1633 and 1594ms per spoken second, against 1464, 1423, 1434 and 1441
-/// on the default CPU provider. Consistently about 10% slower, so the code for
-/// it was removed rather than left as a switch nobody should flip. The same
-/// happened with Chatterbox's decoder, where CoreML cost 105ms per token
-/// against 65ms on CPU.
+/// That rate was measured in a release build by two independent harnesses,
+/// `length_curve` and `first_unit_candidates`, and is flat from 29 to 197
+/// characters at 543 to 648ms per spoken second. Synthesis therefore runs about
+/// 1.7x *faster* than the speech it produces.
 ///
-/// The consequence is structural: synthesis runs about 1.44x slower than the
-/// speech it produces, so playback started before rendering finishes will
-/// always fall behind. Measured on a 651-character passage: 19.2 seconds of
-/// inserted silence across a 66.2 second read, and 9.8 seconds before the first
-/// word, nearly all of it spent rendering the first unit rather than loading
-/// the model.
+/// **It replaces an earlier figure of 1480ms per spoken second and a claim that
+/// synthesis ran 1.44x slower than speech.** Those came from a machine under
+/// heavy load and do not reproduce. The scale of that error is the most useful
+/// thing to know before trusting any timing in this file: the identical
+/// measurement, taken while this Mac was 25GB into swap with a load average of
+/// 140, returned about 15000ms per spoken second, which is 20 to 40x worse than
+/// a quiet run. Measure the machine before you believe a regression here.
+///
+/// CoreML was registered as an execution provider and measured across four
+/// lengths: 1519, 1559, 1633 and 1594ms per spoken second, against 1464, 1423,
+/// 1434 and 1441 on the default CPU provider. Consistently about 10% slower, so
+/// the code for it was removed rather than left as a switch nobody should flip.
+/// The same happened with Chatterbox's decoder, where CoreML cost 105ms per
+/// token against 65ms on CPU. Those absolute values carry the same load as the
+/// 1480 figure and have not been re-measured, so trust the ranking and not the
+/// numbers.
+///
+/// What the listener waits for is the opening unit alone, because every later
+/// unit renders while the previous one plays. On the self-test passage that is
+/// 2884ms for the whole 80-character first sentence, or 2046ms once
+/// `chunk::split_opening` cuts it at the first comma. Long reads have still
+/// been observed to pause mid-passage; the cause is unresolved, and machine
+/// load is the leading suspect, because an engine this far ahead of playback
+/// cannot starve the queue on its own account.
 static ESPEAK_CALLS: Mutex<()> = Mutex::new(());
 
 pub struct Kokoro {
@@ -560,6 +575,249 @@ mod tests {
                 best.as_secs_f64() * 1000.0 / spoken.max(0.01) as f64
             );
         }
+    }
+
+    /// What each candidate opening costs, measured back to back.
+    ///
+    /// First-word latency is just the speech duration of unit 0 times the
+    /// render rate, so the only lever is how much is said before playback can
+    /// start. Three options, in increasing order of what they cost in prosody:
+    ///
+    ///   full    the whole first sentence, which is what `chunk::split` does
+    ///   clause  cut at the first comma, where intonation already continues
+    ///   head    cut mid-clause, which `chunk.rs` and `player.rs` forbid
+    ///
+    /// Measured three times each and reported in full, because run to run
+    /// variance on this machine has reached 2.4x on identical text and a single
+    /// sample would be meaningless.
+    ///
+    ///     cargo test --release first_unit_candidates -- --ignored --nocapture
+    #[tokio::test]
+    #[ignore]
+    async fn first_unit_candidates() {
+        let k = kokoro();
+        if !k.model_path().exists() {
+            eprintln!("model absent, skipping");
+            return;
+        }
+        let cfg = VoiceConfig {
+            engine: super::super::Engine::Kokoro,
+            voice: "af_heart".into(),
+            speed: 1.0,
+            exaggeration: 0.0,
+        };
+        k.warm().await.expect("warm");
+
+        let candidates = [
+            (
+                "full  ",
+                "The paste target is captured when the key goes down, not when the text is ready.",
+            ),
+            ("clause", "The paste target is captured when the key goes down,"),
+            ("head  ", "The paste target is captured."),
+        ];
+
+        for (label, text) in candidates {
+            let mut runs = Vec::new();
+            let mut spoken = 0.0f64;
+            for _ in 0..3 {
+                let started = std::time::Instant::now();
+                let segment = k.synthesize(text, &cfg).await.expect("synthesis");
+                runs.push(started.elapsed().as_secs_f64() * 1000.0);
+                spoken = segment.pcm.len() as f64 / segment.sample_rate as f64;
+            }
+            let best = runs.iter().cloned().fold(f64::MAX, f64::min);
+            let worst = runs.iter().cloned().fold(0.0f64, f64::max);
+            eprintln!(
+                "  {label} {:>3} chars  {spoken:>5.2}s speech   best {best:>6.0}ms  \
+                 worst {worst:>6.0}ms  ({:>4.0}ms/spoken s at best)   runs {:?}",
+                text.len(),
+                best / spoken.max(0.01),
+                runs.iter().map(|r| r.round() as i64).collect::<Vec<_>>()
+            );
+        }
+        eprintln!("\n  target for the first word is under 1500ms");
+    }
+
+    /// How cost scales with unit length.
+    ///
+    /// `latency_shape` stops at 71 characters and reports a flat rate. The real
+    /// passage has 63 to 122 character units and costs far more per spoken
+    /// second, so the flat region is not where the app actually runs. If the
+    /// curve rises, shorter units are cheaper in total as well as sooner, and
+    /// `chunk::MAX_UNIT_CHARS` is the lever worth pulling.
+    ///
+    /// Swept ascending, then descending, in one run. Thermal drift penalises
+    /// whichever end is measured last, so only a curve that survives both
+    /// directions is real. This project has already been fooled once by running
+    /// a sweep in a single direction; see the thread-count note above.
+    ///
+    ///     cargo test --release length_curve -- --ignored --nocapture
+    #[tokio::test]
+    #[ignore]
+    async fn length_curve() {
+        let k = kokoro();
+        if !k.model_path().exists() {
+            eprintln!("model absent, skipping");
+            return;
+        }
+        let cfg = VoiceConfig {
+            engine: super::super::Engine::Kokoro,
+            voice: "af_heart".into(),
+            speed: 1.0,
+            exaggeration: 0.0,
+        };
+        k.warm().await.expect("warm");
+
+        /// Whole words up to `chars`, closed with a full stop so the model is
+        /// given a complete utterance at every length.
+        fn prefix(text: &str, chars: usize) -> String {
+            let mut out = String::new();
+            for word in text.split_whitespace() {
+                let word = word.trim_end_matches(['.', ',', ';', ':']);
+                if out.chars().count() + word.chars().count() + 1 > chars {
+                    break;
+                }
+                if !out.is_empty() {
+                    out.push(' ');
+                }
+                out.push_str(word);
+            }
+            out.push('.');
+            out
+        }
+
+        let passage = super::super::read_aloud::SELFTEST_PASSAGE;
+        let mut lengths = vec![30usize, 60, 90, 120, 160, 200];
+
+        for direction in ["ascending", "descending"] {
+            eprintln!("  {direction}:");
+            for &n in &lengths {
+                let text = prefix(passage, n);
+                let mut best = f64::MAX;
+                let mut spoken = 0.0f64;
+                // Best of two: the first call of a given shape carries
+                // allocation noise, as latency_shape already found.
+                for _ in 0..2 {
+                    let started = std::time::Instant::now();
+                    let segment = k.synthesize(&text, &cfg).await.expect("synthesis");
+                    best = best.min(started.elapsed().as_secs_f64() * 1000.0);
+                    spoken = segment.pcm.len() as f64 / segment.sample_rate as f64;
+                }
+                eprintln!(
+                    "    {:>3} chars -> {spoken:>5.2}s speech in {best:>7.0}ms  \
+                     ({:>4.0}ms/spoken s)",
+                    text.len(),
+                    best / spoken.max(0.01)
+                );
+            }
+            lengths.reverse();
+        }
+    }
+
+    /// What a real passage costs, unit by unit, with nothing playing.
+    ///
+    /// Deliberately isolates synthesis from playback. The figures in
+    /// `player.rs` come from a live read, where a cpal callback runs at
+    /// real-time priority on the same cores as the model. If this harness is
+    /// much faster than the live read, contention is the cost and the ratio in
+    /// the docs describes the app rather than the engine.
+    ///
+    /// Reports cumulative render against cumulative speech, which is what
+    /// decides whether the queue can starve at all.
+    ///
+    ///     cargo test --release passage_latency -- --ignored --nocapture
+    #[tokio::test]
+    #[ignore]
+    async fn passage_latency() {
+        let k = kokoro();
+        if !k.model_path().exists() {
+            eprintln!("model absent, skipping");
+            return;
+        }
+        let cfg = VoiceConfig {
+            engine: super::super::Engine::Kokoro,
+            voice: "af_heart".into(),
+            speed: 1.0,
+            exaggeration: 0.0,
+        };
+        k.warm().await.expect("warm");
+
+        let passage = super::super::read_aloud::SELFTEST_PASSAGE;
+        let units = super::super::chunk::split(passage);
+        eprintln!(
+            "passage {} chars -> {} units (the first unit is the first word latency)",
+            passage.len(),
+            units.len()
+        );
+
+        let mut render_s = 0.0f64;
+        let mut speech_s = 0.0f64;
+        let mut first_ms = 0.0f64;
+
+        for (i, unit) in units.iter().enumerate() {
+            // Rendered twice, on the same text, so length and punctuation are
+            // held constant and the only difference is whether the session has
+            // seen this shape before. The app only ever pays the first call;
+            // the gap between the two is what repetition buys, and
+            // `length_curve` reports that cheaper number by taking best of two.
+            let mut cold = 0.0f64;
+            let mut repeat = 0.0f64;
+            let mut spoken = 0.0f64;
+            for pass in 0..2 {
+                let started = std::time::Instant::now();
+                let segment = k.synthesize(&unit.text, &cfg).await.expect("synthesis");
+                let ms = started.elapsed().as_secs_f64() * 1000.0;
+                spoken = segment.pcm.len() as f64 / segment.sample_rate as f64;
+                if pass == 0 {
+                    cold = ms;
+                } else {
+                    repeat = ms;
+                }
+            }
+
+            // Cumulative figures use the cold timing, because that is the only
+            // one a real read ever pays.
+            render_s += cold / 1000.0;
+            speech_s += spoken;
+            if i == 0 {
+                first_ms = cold;
+            }
+
+            // A positive "behind" means rendering has fallen behind the speech
+            // already queued, which is the only way the player can run dry.
+            eprintln!(
+                "  unit {i:>2} {:>4} chars {spoken:>5.2}s speech   cold {cold:>6.0}ms \
+                 ({:>4.0}ms/s)   repeat {repeat:>6.0}ms ({:>4.0}ms/s)   behind {:+.2}s",
+                unit.text.len(),
+                cold / spoken.max(0.01),
+                repeat / spoken.max(0.01),
+                render_s - speech_s
+            );
+        }
+
+        // Unit 0 again, after every other shape has passed through the session.
+        // Fast means allocations for a seen shape survive, and bucketing token
+        // lengths would make real reads pay the repeat price. Slow means they
+        // are evicted and every unit of a real read pays the cold price.
+        {
+            let started = std::time::Instant::now();
+            let segment = k.synthesize(&units[0].text, &cfg).await.expect("synthesis");
+            let ms = started.elapsed().as_secs_f64() * 1000.0;
+            let spoken = segment.pcm.len() as f64 / segment.sample_rate as f64;
+            eprintln!(
+                "\n  unit  0 revisited after the others: {ms:.0}ms ({:.0}ms/spoken s)",
+                ms / spoken.max(0.01)
+            );
+        }
+
+        eprintln!(
+            "\n  first unit:     {first_ms:.0}ms   (target is under 1500ms)\n  \
+             whole passage:  {render_s:.1}s render for {speech_s:.1}s speech  \
+             ({:.2}x realtime)\n  queue starves:  {}",
+            speech_s / render_s.max(0.001),
+            if render_s > speech_s { "yes" } else { "no, rendering outpaces playback" }
+        );
     }
 
     /// espeak throws punctuation away, so the marks have to be re-inserted or

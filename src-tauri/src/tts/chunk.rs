@@ -16,6 +16,27 @@ const MIN_UNIT_CHARS: usize = 24;
 /// the model's context and the tail degrades.
 const MAX_UNIT_CHARS: usize = 280;
 
+/// Above this, the opening unit is cut at its first clause boundary.
+///
+/// The opening is the only unit whose length the listener experiences as a
+/// wait: every later one renders while the previous plays. First-word latency
+/// is just the opening's speech duration times the render rate, so shortening
+/// it is the only lever there is.
+///
+/// Measured on this machine, release build, three runs each on a quiet system:
+/// the 80-character opening of the self-test passage rendered in 2884ms, and
+/// the same sentence cut at its comma to 52 characters in 2046ms. Below this
+/// threshold the saving does not justify an extra unit.
+const FIRST_UNIT_SOFT_MAX: usize = 60;
+
+/// Where the opening may be cut. Clause boundaries only.
+///
+/// Never a word boundary. Cutting mid-clause produces a falling intonation on
+/// the first thing the listener hears, which is the failure this whole module
+/// exists to prevent. A comma already implies continuation, so the voice
+/// carries across it.
+const CLAUSE_MARKS: [char; 3] = [',', ';', ':'];
+
 #[derive(Debug, Clone)]
 pub struct Unit {
     pub text: String,
@@ -36,6 +57,49 @@ pub fn split(text: &str) -> Vec<Unit> {
             });
         }
     }
+    split_opening(units)
+}
+
+/// Cuts the opening unit at its first clause boundary, when that shortens the
+/// wait before the first word without cutting mid-clause.
+///
+/// Only the opening, and only when there is something to gain. Three ways it
+/// declines: a short opening is already fast, a head below `MIN_UNIT_CHARS`
+/// renders with the odd emphasis `merge_short` exists to avoid, and a stub
+/// remainder would have the same problem one unit later.
+fn split_opening(mut units: Vec<Unit>) -> Vec<Unit> {
+    let Some(first) = units.first() else {
+        return units;
+    };
+    if first.text.chars().count() <= FIRST_UNIT_SOFT_MAX {
+        return units;
+    }
+
+    let text = first.text.clone();
+    let context = first.context.clone();
+
+    // The earliest clause boundary leaving a head worth saying on its own,
+    // because the earliest one is the shortest wait.
+    let mut cut = None;
+    for (i, c) in text.char_indices() {
+        if CLAUSE_MARKS.contains(&c) && text[..=i].chars().count() >= MIN_UNIT_CHARS {
+            cut = Some(i + c.len_utf8());
+            break;
+        }
+    }
+
+    let Some(cut) = cut else {
+        return units;
+    };
+    let head = text[..cut].trim().to_string();
+    let tail = text[cut..].trim().to_string();
+
+    if tail.chars().count() < MIN_UNIT_CHARS {
+        return units;
+    }
+
+    units[0] = Unit { text: head.clone(), context };
+    units.insert(1, Unit { text: tail, context: Some(head) });
     units
 }
 
@@ -137,6 +201,72 @@ mod tests {
              This is the second sentence and it is also long enough.",
         );
         assert_eq!(units[1].context.as_deref(), Some("This is the first sentence and it is long enough."));
+    }
+
+    /// The whole point: a long opening is cut at its comma so the first word
+    /// arrives sooner. Measured at 2884ms before this, 2046ms after.
+    #[test]
+    fn a_long_opening_is_cut_at_its_first_clause() {
+        let units = split(
+            "The paste target is captured when the key goes down, not when the text is ready.",
+        );
+        assert_eq!(units[0].text, "The paste target is captured when the key goes down,");
+        assert_eq!(units[1].text, "not when the text is ready.");
+        // The tail continues from the head, so the model gets the intonation right.
+        assert_eq!(units[1].context.as_deref(), Some(units[0].text.as_str()));
+    }
+
+    /// A short opening is already fast, and an extra unit would cost more in
+    /// prosody than it saves in time.
+    #[test]
+    fn a_short_opening_is_left_whole() {
+        let units = split("One sentence here that is long enough to stand alone.");
+        assert_eq!(units.len(), 1);
+        assert!(units[0].text.ends_with("alone."));
+    }
+
+    /// No clause boundary means no cut. A word-boundary cut would produce the
+    /// falling intonation this module exists to prevent, on the first thing
+    /// the listener hears.
+    #[test]
+    fn an_opening_without_a_clause_boundary_is_never_cut_mid_clause() {
+        let text = "The quick brown fox jumped over the extremely lazy dog again and again today.";
+        let units = split(text);
+        assert_eq!(units.len(), 1, "it should not have been cut");
+        assert_eq!(units[0].text, text);
+    }
+
+    /// An early comma would leave a head too short to render well, so the cut
+    /// moves to the next boundary that clears MIN_UNIT_CHARS.
+    ///
+    /// The tail is deliberately long here. An earlier version of this test
+    /// ended it at "before anything else.", which is 21 characters, so the
+    /// stub-remainder guard refused the cut and the test passed its first
+    /// assertion while exercising a completely different branch.
+    #[test]
+    fn a_very_early_comma_does_not_produce_a_stub_head() {
+        let units = split(
+            "Yes, the paste target is captured when the key goes down, \
+             before anything else happens on screen.",
+        );
+        assert_eq!(units.len(), 2);
+        // Not "Yes,", which is four characters and would render with the odd
+        // emphasis that merge_short exists to avoid.
+        assert_eq!(
+            units[0].text,
+            "Yes, the paste target is captured when the key goes down,"
+        );
+        assert_eq!(units[1].text, "before anything else happens on screen.");
+    }
+
+    /// A cut that would leave a stub behind is refused: the problem would just
+    /// land one unit later.
+    #[test]
+    fn a_cut_leaving_a_stub_remainder_is_refused() {
+        let text = "The paste target is captured when the key finally goes down, quickly.";
+        let units = split(text);
+        assert_eq!(units.len(), 1, "the remainder would have been a stub");
+        assert_eq!(units[0].text, text);
     }
 
     #[test]

@@ -101,10 +101,14 @@ What is actually measured:
 
 - **Dictation**: the Status screen reports the end-to-end median round trip from
   the history store, over 24 hours. It has been running a little over 2.5s.
-- **Read-aloud**: Kokoro renders ~1.44x slower than the speech it produces
-  (~1480ms per spoken second). On a 651-character passage: 9.8s before the first
-  word, 19.2s of inserted silence across a 66.2s read. CoreML is consistently
-  ~10% slower than CPU. See the module doc at the top of `tts/kokoro.rs`.
+- **Read-aloud**: Kokoro renders about 585ms per spoken second, roughly 1.7x
+  faster than real time, flat from 29 to 197 characters. What the listener waits
+  for is the opening unit alone: 2884ms for a whole 80-character sentence, and
+  2046ms once `chunk::split_opening` cuts it at the first comma. The older
+  figures in this file (1480ms per spoken second, 1.44x slower than speech, 9.8s
+  to the first word) came from a loaded machine and do not reproduce. CoreML is
+  about 10% slower than CPU, measured under that same load, so trust the ranking
+  and not the absolutes. See the module doc at the top of `tts/kokoro.rs`.
 
 If a change moves the dictation median materially, say so with before/after
 numbers from the same session — thermal drift on this machine has faked a 17%

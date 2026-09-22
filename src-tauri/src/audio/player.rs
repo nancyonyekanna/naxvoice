@@ -1,28 +1,32 @@
 //! Interruptible playback for synthesised speech.
 //!
-//! Synthesis runs at roughly 1480ms per spoken second — measured, and flat
-//! across sentence lengths — so waiting for a whole passage before making a
-//! sound would leave seconds of silence. Segments are therefore played as they
-//! arrive, while later ones are still being rendered.
+//! Synthesis runs at roughly 585ms per spoken second, measured in release and
+//! flat from 29 to 197 characters, so it renders about 1.7x faster than the
+//! speech it produces. Segments are still played as they arrive rather than
+//! after the whole passage, because the opening unit is pure waiting and there
+//! is no reason to add every later unit to it.
 //!
-//! **The gaps that follow from this are deliberate.** Because rendering is
-//! about 1.44x slower than the speech it produces, playback catches up and the
-//! queue runs dry. Measured on a 651-character passage: 19.2 seconds of
-//! inserted silence across a 66.2 second read. `starved_frames` counts it.
+//! **An earlier version of this file said the opposite, and built a design on
+//! it.** It recorded 1480ms per spoken second, a 1.44x deficit, and 19.2
+//! seconds of inserted silence across a 66.2 second read, and concluded the
+//! gaps were deliberate and unavoidable. The rate is wrong by about 2.5x, so
+//! that conclusion does not follow: an engine which outpaces playback cannot
+//! starve this queue on its own account.
 //!
-//! Every alternative was measured and is worse. Rendering the whole passage
-//! first removes the gaps but costs about 1.4x the passage length in silence
-//! before the first word — roughly ninety seconds for a one-minute article.
-//! A partial buffer cannot remove them either, because the deficit accumulates
-//! for as long as the passage lasts. Starting sooner by splitting the opening
-//! sentence mid-clause is what `tts::chunk` exists to prevent: it produces a
-//! falling intonation mid-sentence, and it would land on the first thing the
-//! listener hears. A faster engine would fix all of it, and there is not one —
-//! CoreML measured slower than CPU for this model.
+//! The observation was real even though the explanation was not. Long reads
+//! have paused mid-passage, and `starved_frames` still counts it. The cause is
+//! unresolved. Machine load is the leading suspect: the identical measurement
+//! taken while the machine was 25GB into swap came back 20 to 40 times worse,
+//! which is comfortably the scale that produces audible gaps.
 //!
-//! So the silence lands between sentences, never mid-word, because whole units
-//! are queued at once. That is the trade, chosen knowingly. Do not replace it
-//! with a pre-buffer without re-measuring the ratio first.
+//! Two things still hold regardless of the rate. Silence lands between
+//! sentences rather than mid-word, because whole units are queued at once. And
+//! splitting the opening *mid-clause* remains forbidden: it produces a falling
+//! intonation on the first thing the listener hears. `tts::chunk` cuts the
+//! opening at a clause boundary instead, which costs nothing in prosody.
+//!
+//! Do not reintroduce a pre-buffer on the strength of the old numbers. If gaps
+//! appear, measure the machine before changing the code.
 //!
 //! They arrive out of order, because renders are dispatched concurrently, so
 //! the player reorders by index exactly as `stt::stitch` does for transcripts.
