@@ -135,5 +135,7 @@ and does not reproduce. Machine load is the leading suspect: the same
 measurement on a Mac deep into swap came back twenty to forty times worse. See
 the note at the top of `tts/kokoro.rs`.
 
-**Gatekeeper refuses to open it.** The app is ad-hoc signed, not notarised.
+**Gatekeeper refuses to open it.** The app is signed, but with an ad-hoc
+signature rather than an Apple Developer ID, and only a Developer ID signature
+can be notarised.
 Right-click → Open, once.

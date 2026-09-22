@@ -20,9 +20,11 @@ Dictation into TextEdit, at real speed. The recording has no sound.
 
 **[Latest release](https://github.com/nancyonyekanna/naxvoice/releases/latest)**
 
-macOS will block it the first time, because the app is signed but not notarised.
-Open System Settings, go to Privacy and Security, scroll to the message about
-naxvoice, and click Open Anyway.
+macOS will block it the first time. The app is signed, but with an ad-hoc
+signature rather than an Apple Developer ID, and only a Developer ID signature
+can be notarised. Gatekeeper treats anything else as unverified, whoever wrote
+it. Open System Settings, go to Privacy and Security, scroll to the message
+about naxvoice, and click Open Anyway.
 
 ## Requirements
 
@@ -145,10 +147,7 @@ nothing writes it today.
 
 ### Download the app
 
-Take the disk image from the [latest release](https://github.com/nancyonyekanna/naxvoice/releases/latest),
-drag naxvoice to Applications, and open it. macOS blocks it the first time, so
-allow it in System Settings under Privacy and Security, then follow the setup
-screen inside the app.
+See [Download](#download) above.
 
 **Apple Silicon only.** No Intel or universal build has been produced or tested,
 so this says nothing about whether one would work.
@@ -209,7 +208,7 @@ something working end to end before making it fast.
 
 macOS needs two permissions, and they are **separate grants**: Input Monitoring
 decides whether the dictation key fires at all, Accessibility decides whether the
-text can be pasted. Neither is prompted for, you add naxvoice to both lists by
+text can be pasted. Neither is prompted for, so you add naxvoice to both lists by
 hand, and both are only read at launch. The setup screen inside the app walks you
 through both, and INSTALL.md says what each failure looks like.
 

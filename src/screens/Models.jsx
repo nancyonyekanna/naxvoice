@@ -71,7 +71,10 @@ export default function Models() {
             {key?.present ? (
               <span className="meta">
                 {" "}
-                · stored {key.source === "environment" ? "in the environment" : "in the keychain"}{" "}
+                {/* "stored in the environment" read like a filing error. Both
+                    sources are supported, so the label states which one is in
+                    use rather than implying one of them is a mistake. */}
+                · {key.source === "environment" ? "read from your environment" : "saved in your keychain"}{" "}
                 <span className="mono">{key.hint}</span>
               </span>
             ) : (
@@ -96,11 +99,26 @@ export default function Models() {
         </div>
       </div>
 
+      {/* This used to open "The key is stored in the OS keychain", which
+          contradicted the label above it whenever the key came from the
+          environment. The label was not the problem; a screen that asserts one
+          thing and displays another is what reads as a warning. */}
       <p className="hint">
-        The key is stored in the OS keychain, never in config.yaml. An
-        environment variable still works for development and takes second place
-        to a saved key.
+        Either source works. Saving one here puts it in the OS keychain, where
+        it survives a reboot and takes precedence. An environment variable, or
+        a <span className="mono">.env</span> beside{" "}
+        <span className="mono">config.yaml</span>, is read when no key is saved,
+        which is the quickest way to get going. Neither ever goes into{" "}
+        <span className="mono">config.yaml</span>.
       </p>
+      {key?.present && key.source === "environment" ? (
+        <p className="hint">
+          Yours is coming from the environment right now. Paste it above and
+          save to move it into the keychain; the environment copy then takes
+          second place, and removing it is something only you can do, since the
+          app cannot edit your <span className="mono">.env</span>.
+        </p>
+      ) : null}
 
       <div className="rows" style={{ marginTop: 16 }}>
         <Select

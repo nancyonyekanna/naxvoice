@@ -98,9 +98,14 @@ export default function Hotkeys() {
         </div>
       </div>
 
+      {/* Derived from KEYS rather than written out, because the last version
+          said "only the two Command keys" and stayed that way after Right
+          Option was added. A count beside a list it does not read is a
+          sentence waiting to go stale. */}
       <p className="hint">
-        Only the two Command keys are offered. They are the only keycodes
-        verified against a real table, and a wrong one produces a key that
+        {KEYS.length} keys are offered: {KEYS.map((k) => k.label).join(", ")}.
+        Each keycode is checked against Apple's Events.h and tao's own table
+        before it appears here, because a wrong one produces a key that
         silently never fires.
       </p>
       <p className="hint">
