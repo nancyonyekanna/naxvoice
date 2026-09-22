@@ -123,6 +123,20 @@ pub trait Platform: Send + Sync {
     /// Open the OS permission prompt or settings pane. No-op where unneeded.
     fn request_input_permission(&self) -> Result<()>;
 
+    /// Open the pane governing whether key events are delivered at all.
+    ///
+    /// Separate from `request_input_permission` for exactly the reason
+    /// `has_key_watch_permission` is separate from `has_input_permission`:
+    /// macOS split Input Monitoring out from Accessibility, they are granted
+    /// independently, and sending someone to the wrong pane wastes the single
+    /// piece of attention they were willing to spend on permissions.
+    ///
+    /// Defaulted rather than required, so a platform that needs no such grant
+    /// does not have to write an empty method to say so.
+    fn request_key_watch_permission(&self) -> Result<()> {
+        Ok(())
+    }
+
     /// Stops this app from being one the OS will bring to the front.
     ///
     /// Measured, because the obvious reasoning is wrong: building the overlay

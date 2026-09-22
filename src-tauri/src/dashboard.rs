@@ -164,6 +164,83 @@ pub fn clear_api_key() -> Result<secrets::KeyStatus, String> {
     Ok(secrets::status())
 }
 
+/// What first run still needs, as booleans rather than prose.
+///
+/// `status_snapshot` already reports these as warning sentences, which is right
+/// for someone reading a status page and useless for a screen that has to put a
+/// tick beside each item and offer a button for it.
+#[derive(Serialize)]
+pub struct Setup {
+    /// Whether the dictation key will fire at all.
+    input_monitoring: bool,
+    /// Whether pasted text can land.
+    accessibility: bool,
+    key: bool,
+    /// "keychain", "environment" or "none".
+    key_source: &'static str,
+    complete: bool,
+}
+
+#[tauri::command]
+pub fn setup_status(app: AppHandle) -> Setup {
+    let platform = app.state::<crate::Platforms>();
+    let key = secrets::status();
+
+    let input_monitoring = platform.0.has_key_watch_permission();
+    let accessibility = platform.0.has_input_permission();
+
+    Setup {
+        input_monitoring,
+        accessibility,
+        key: key.present,
+        key_source: key.source,
+        complete: input_monitoring && accessibility && key.present,
+    }
+}
+
+/// Opens the System Settings pane for one permission.
+///
+/// Two panes, not one. macOS grants Input Monitoring and Accessibility
+/// separately, and a button that opened the wrong one would look broken to
+/// someone who had already granted the other.
+#[tauri::command]
+pub fn open_permission_settings(app: AppHandle, which: String) -> Result<(), String> {
+    let platform = app.state::<crate::Platforms>();
+    let opened = match which.as_str() {
+        "input_monitoring" => platform.0.request_key_watch_permission(),
+        "accessibility" => platform.0.request_input_permission(),
+        other => return Err(format!("there is no permission pane named {other:?}")),
+    };
+    opened.map_err(|e| format!("{e:#}"))
+}
+
+/// Checks the saved key against OpenRouter. Costs nothing.
+#[tauri::command]
+pub async fn verify_api_key(app: AppHandle) -> Result<String, String> {
+    // Cloned out before the await so no state guard spans it.
+    let base_url = app.state::<Config>().transcription.base_url.clone();
+
+    let Some(key) = secrets::resolve() else {
+        return Err("No key is saved yet.".into());
+    };
+
+    crate::stt::openrouter::verify(&base_url, &key)
+        .await
+        .map(|()| "The key works.".to_string())
+        .map_err(|e| format!("{e:#}"))
+}
+
+/// Relaunches the app.
+///
+/// Both macOS permissions are read once, at launch, so granting one changes
+/// nothing until the process starts again. Offering the restart is honest;
+/// letting the screen poll forever for a state that cannot change would not be.
+#[tauri::command]
+pub fn restart_app(app: AppHandle) {
+    tracing::info!("restarting to pick up newly granted permissions");
+    app.restart()
+}
+
 #[tauri::command]
 pub fn status_snapshot(app: AppHandle) -> Snapshot {
     let config = app.state::<crate::config::Config>();

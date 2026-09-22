@@ -319,6 +319,17 @@ impl Platform for Darwin {
         Ok(())
     }
 
+    fn request_key_watch_permission(&self) -> Result<()> {
+        // Same reasoning as the pane above. `IOHIDRequestAccess` prompts once
+        // per app and never again, so for anyone who has already dismissed it
+        // the settings pane is the only route that still works.
+        std::process::Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
+            .status()
+            .context("opening the Input Monitoring settings pane")?;
+        Ok(())
+    }
+
     fn hide_from_dock(&self) -> Result<()> {
         // `sharedApplication` wants proof we are on the main thread. Getting
         // that wrong is a crash rather than a misbehaviour, so it is checked

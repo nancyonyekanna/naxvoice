@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Setup from "./screens/Setup.jsx";
 import Status from "./screens/Status.jsx";
 import Models from "./screens/Models.jsx";
 import Dictionary from "./screens/Dictionary.jsx";
@@ -33,6 +34,24 @@ const SCREENS = [
 
 export default function App() {
   const [screen, setScreen] = useState("status");
+  // null until asked. Someone with a working install never sees this.
+  const [setup, setSetup] = useState(null);
+  const [skipped, setSkipped] = useState(false);
+
+  useEffect(() => {
+    const invoke = window.__TAURI__?.core?.invoke;
+    // Outside the app there is nothing to check and nothing to fix.
+    invoke?.("setup_status")
+      .then(setSetup)
+      .catch(() => setSetup(null));
+  }, []);
+
+  // Deliberately read once, at mount. Setup keeps its own live copy while it is
+  // open, so re-reading here would swap the screen away the moment the last
+  // permission landed, before the user had been told it worked.
+  if (setup && !setup.complete && !skipped) {
+    return <Setup onClose={() => setSkipped(true)} />;
+  }
 
   return (
     <div className="app">

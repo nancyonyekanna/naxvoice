@@ -83,6 +83,40 @@ impl TranscriptionResponse {
     }
 }
 
+/// Checks a key against OpenRouter without spending anything.
+///
+/// `/key` is the same 656-byte endpoint `warm` uses, chosen there because
+/// `/models` returns 737KB across 444 models.
+///
+/// The three outcomes are kept apart on purpose. A 401 means the key is wrong.
+/// Anything else unsuccessful is reported as the status it was, and a transport
+/// failure says so, because telling someone their key is invalid when their
+/// network is down sends them to regenerate a key that was fine.
+pub async fn verify(base_url: &str, api_key: &str) -> Result<()> {
+    let http = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .context("building the verification client")?;
+
+    let res = http
+        .get(format!("{base_url}/key"))
+        .bearer_auth(api_key)
+        .header("HTTP-Referer", APP_URL)
+        .header("X-Title", APP_TITLE)
+        .send()
+        .await
+        .context("could not reach OpenRouter")?;
+
+    let status = res.status();
+    if status.is_success() {
+        return Ok(());
+    }
+    if status == reqwest::StatusCode::UNAUTHORIZED {
+        anyhow::bail!("OpenRouter rejected this key");
+    }
+    anyhow::bail!("OpenRouter answered {status}");
+}
+
 pub struct SttClient {
     http: reqwest::Client,
     base_url: String,

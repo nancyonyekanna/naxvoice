@@ -203,3 +203,14 @@ body {
   padding: 16px;
   color: var(--muted);
 }
+
+/* First run takes the whole window rather than a sidebar item. Someone whose
+   dictation key does not fire has no use for the Dictionary screen yet, and a
+   sidebar invites them to wander off before the app can work at all. */
+.setup {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 32px 24px;
+  overflow-y: auto;
+  max-height: 100vh;
+}
