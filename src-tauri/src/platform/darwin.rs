@@ -134,7 +134,7 @@ impl Platform for Darwin {
             if pasteboard.setString_forType(&payload, kind) {
                 bail!(
                     "Accessibility permission is not granted, so the paste could not \
-                     be sent. The text is on the clipboard — press Cmd+V to place it. \
+                     be sent. The text is on the clipboard, so press Cmd+V to place it. \
                      Grant Accessibility in System Settings and relaunch to have it \
                      pasted for you."
                 );

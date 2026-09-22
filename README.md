@@ -3,8 +3,8 @@
 System-wide dictation and read-aloud. Hold a key and speak, polished text lands at
 your cursor. Select any text, press a key, hear it read back in a voice you chose.
 
-**macOS only, today.** Windows is designed for and partly written — the clipboard,
-paste and foreground-window code are all there — but the dictation key itself is
+**macOS only, today.** Windows is designed for and partly written (the clipboard,
+paste and foreground-window code are all there), but the dictation key itself is
 not: watching a bare modifier needs a low-level keyboard hook, and
 `platform/win32.rs` says so with an explicit `bail!` rather than failing quietly.
 Until that lands, the key will never fire on Windows. Help welcome.
@@ -20,18 +20,18 @@ window behind it.
 | | |
 |---|---|
 | ![Status](docs/status.png) | ![Models](docs/models.png) |
-| **Status** — what is loaded, and what it has cost you | **Models** — routing, and the key that never touches disk |
+| **Status**: what is loaded, and what it has cost you | **Models**: routing, and the key that never touches disk |
 | ![Profiles](docs/profiles.png) | ![Dictionary](docs/dictionary.png) |
-| **Profiles** — a different cleanup prompt per app | **Dictionary** — words the transcriber keeps mishearing |
+| **Profiles**: a different cleanup prompt per app | **Dictionary**: words the transcriber keeps mishearing |
 | ![Voice](docs/voice.png) | ![Hotkeys](docs/hotkeys.png) |
-| **Voice** — the read-aloud voice and how it says things | **Hotkeys** — one key to dictate, one to read |
+| **Voice**: the read-aloud voice and how it says things | **Hotkeys**: one key to dictate, one to read |
 
 ## Why it's built this way
 
 **Rolling chunk transcription.** OpenRouter's transcription endpoint is HTTP
 request/response with no realtime websocket, so we can't stream. Instead, voice
 activity detection splits your speech at natural pauses and each segment uploads
-as its own request while you keep talking — a chunk is dispatched the moment it
+as its own request while you keep talking. A chunk is dispatched the moment it
 closes, and a stitcher reassembles the replies in order. On key release only the
 final segment is still in flight.
 
@@ -75,7 +75,7 @@ clause.
 This was meant to be two. The plan was Kokoro for the first sentence with
 Chatterbox-Turbo rendering the rest behind it, for better quality and voice
 cloning. Measured on an M-series Mac, Chatterbox-Turbo needs about 2.1 seconds
-of compute per spoken second — 60ms per token at 25 tokens per second of audio,
+of compute per spoken second: 60ms per token at 25 tokens per second of audio,
 plus 644ms per spoken second in the decoder. A voice that renders slower than it
 speaks cannot hand off to anything. Every precision was tried (fp16 60ms/token,
 q4f16 65ms, int8 798ms) and CoreML was worse than CPU at 105ms. Revisit only
@@ -183,7 +183,7 @@ something working end to end before making it fast.
 
 macOS needs two permissions, and they are **separate grants**: Input Monitoring
 decides whether the dictation key fires at all, Accessibility decides whether the
-text can be pasted. Neither is prompted for — you add naxvoice to both lists by
+text can be pasted. Neither is prompted for, you add naxvoice to both lists by
 hand, and both are only read at launch. INSTALL.md says where, and what each
 failure looks like.
 
@@ -194,7 +194,7 @@ is not written.
 
 ## License
 
-The code written for this project is MIT — see [LICENSE](LICENSE).
+The code written for this project is MIT, see [LICENSE](LICENSE).
 
 It is not MIT all the way down. The repository redistributes eSpeak NG's data
 files, which are **GPL-3.0-or-later**, and the build links eSpeak NG itself, so

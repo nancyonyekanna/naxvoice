@@ -4,11 +4,11 @@ System-wide dictation and read-aloud for macOS and Windows. Tauri app, Rust core
 React dashboard. Transcription and cleanup via OpenRouter, speech synthesis local.
 
 Read `README.md` for architecture and `DESIGN.md` for the UI spec before writing
-code. `design/wireframes.html` is the visual reference — open it in a browser to
+code. `design/wireframes.html` is the visual reference, open it in a browser to
 see the screens and the overlay laid out. Build the React dashboard to match its
 structure and hierarchy, not its exact pixel values.
 
-`config.example.yaml` is the contract between the Rust core and the dashboard —
+`config.example.yaml` is the contract between the Rust core and the dashboard:
 every control in the UI maps to a key in there.
 
 ## Current state
@@ -60,7 +60,7 @@ to the second machine an afternoon rather than a rewrite.
 
 **The API key never touches disk in plaintext and never enters git.** It lives in
 the OS keychain via the `keyring` crate (`src-tauri/src/secrets.rs`), with
-`apple-native` / `windows-native` features — keyring has no default feature and
+`apple-native` / `windows-native` features: keyring has no default feature and
 silently uses an in-memory mock store without them. `tauri-plugin-stronghold` was
 the original plan and is deliberately unused: it needs a password a tray app has
 nowhere good to keep. `config.yaml` is gitignored; only `config.example.yaml` is
@@ -71,7 +71,7 @@ committed, with placeholders.
 
 **The overlay must never take focus.** It is created visible and parked
 off-screen; showing it moves it, and hiding it parks it again. Do not call
-`show()` — `tao`'s `set_visible(true)` calls `makeKeyAndOrderFront`, which
+`show()`: `tao`'s `set_visible(true)` calls `makeKeyAndOrderFront`, which
 activates the app regardless of `focusable`/`focused`, and taking focus loses the
 paste target.
 
@@ -93,7 +93,7 @@ started citing the README as their source.
 
 ## Latency, as measured
 
-There is no per-stage breakdown — the old budget table in this file assumed Opus
+There is no per-stage breakdown. The old budget table in this file assumed Opus
 upload and speculative cleanup, neither of which was ever implemented, so it
 described a pipeline that does not exist.
 
@@ -111,7 +111,7 @@ What is actually measured:
   and not the absolutes. See the module doc at the top of `tts/kokoro.rs`.
 
 If a change moves the dictation median materially, say so with before/after
-numbers from the same session — thermal drift on this machine has faked a 17%
+numbers from the same session. Thermal drift on this machine has faked a 17%
 win before, so alternate runs rather than running one config after the other.
 
 ## Conventions

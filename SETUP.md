@@ -12,7 +12,7 @@ cd naxvoice
 
 macOS works today. **Windows does not yet**: the dictation key is watched
 rather than registered, and the Windows implementation of that is an explicit
-`bail!` — the key will never fire. See `platform/win32.rs`.
+`bail!`: the key will never fire. See `platform/win32.rs`.
 
 ## 2. Prerequisites
 
@@ -51,7 +51,7 @@ Two things about that dependency are worth knowing before you hit them.
 Its default build runs a freshly compiled binary to generate data files, and
 that step crashes on Apple Silicon with `SIGTRAP` at `[31%] Compile
 intonations`. `Cargo.toml` therefore builds it with `default-features = false`,
-which skips that step — and because the data it would have produced is then
+which skips that step, and because the data it would have produced is then
 missing, a trimmed copy is committed at `src-tauri/resources/espeak-ng-data`
 (1.3MB: the phoneme tables, the English dictionary, and `lang/gmw`). Do not
 delete it; espeak fails at runtime with `Error processing file 'phontab'`
@@ -80,13 +80,13 @@ NotAttempted("llvm-rc")
 This never happens on Windows itself, where `rc.exe` comes with the MSVC build
 tools. From a Mac, either `brew install llvm` to get `llvm-rc` on PATH, or
 type-check `platform/win32.rs` in a throwaway crate that has no Tauri build
-script — a stub of the `Platform` trait plus the real `windows` dependency,
+script: a stub of the `Platform` trait plus the real `windows` dependency,
 pulling in the real file with `#[path = "..."] mod win32;`. The second is
 faster and checks exactly the code that can't be compiled in-tree.
 
 ## 3. Install the frontend tooling
 
-The Tauri shell is committed — `src-tauri/Cargo.toml`, `tauri.conf.json`,
+The Tauri shell is committed: `src-tauri/Cargo.toml`, `tauri.conf.json`,
 `build.rs`, `capabilities/` and the icons are already in the repo, so there is
 no generator to run. The React dashboard is committed too: `index.html` at the
 repository root is the Vite entry point and loads `src/main.jsx`. There is no
@@ -103,7 +103,7 @@ as a blank window rather than as an error.
 
 `src-tauri/Cargo.toml` carries only what the code in the tree actually calls.
 `ort`, `num2words`, `thiserror` and `tauri-plugin-stronghold` are listed there in
-a comment against the step that introduces each one — adding them up front means
+a comment against the step that introduces each one: adding them up front means
 compiling native ONNX toolchains for code nothing calls yet. `cpal` and `hound`
 joined at step 2, when capture became real.
 
@@ -122,7 +122,7 @@ cp config.example.yaml config.yaml
 ```
 
 If you already have a `config.yaml` from before the single-key interaction, it
-will not load — the `hotkeys` section changed shape and the app stops with
+will not load: the `hotkeys` section changed shape and the app stops with
 
 ```
 parsing config.yaml: hotkeys: missing field `dictate_key`
@@ -172,7 +172,7 @@ launch, so quit and reopen the app after granting.
 
 macOS ties these grants to the binary's code signature, and `tauri dev`
 produces an **ad-hoc signature that changes on every rebuild**. So a grant you
-made ten minutes ago stops applying the moment you recompile — the entry still
+made ten minutes ago stops applying the moment you recompile: the entry still
 sits in the list looking enabled while doing nothing.
 
 Worse, permissions are attributed to the *responsible process*, which for a dev
@@ -207,14 +207,14 @@ Two ways to stay sane:
 
 **In dev, grant it to your terminal, not to naxvoice.** Under `tauri dev` the
 binary is a bare, ad-hoc-signed executable with no `.app` bundle, so macOS
-attributes the permission to the responsible process up the chain — Terminal, or
+attributes the permission to the responsible process up the chain: Terminal, or
 whichever app launched `npm run tauri dev`. Adding
 `src-tauri/target/debug/naxvoice` to the Accessibility list looks right and does
 nothing. The same rule is why the microphone prompt names your terminal.
 
 Grant it in System Settings → Privacy & Security → Accessibility, then restart
 the dev server: the permission is only read at launch. Granting the terminal has
-a useful side effect — rebuilds no longer invalidate it, whereas an entry for the
+a useful side effect: rebuilds no longer invalidate it, whereas an entry for the
 binary lapses every time the binary is replaced.
 
 A release build (`npm run tauri build`) produces a real `naxvoice.app` with a
@@ -228,8 +228,8 @@ a single key (Right Command by default) rather than registering a hotkey, and
 that watching may require Input Monitoring even though pasting requires
 Accessibility. Having one does not grant the other.
 
-Grant it to the same thing you granted Accessibility — your terminal in dev, the
-bundled app in a release build — under System Settings → Privacy & Security →
+Grant it to the same thing you granted Accessibility (your terminal in dev, the
+bundled app in a release build), under System Settings → Privacy & Security →
 Input Monitoring. The app checks at startup and says so:
 
 ```
@@ -304,7 +304,7 @@ scaffolded but inert. Do not start at build step 1: the list there is a record
 of how this was built, not a plan to follow. Steps 1-6 and 8 are done, and step
 7 was measured and abandoned.
 
-Two features have config keys and no implementation — speculative cleanup and
+Two features have config keys and no implementation: speculative cleanup and
 Opus upload. Treat either as unbuilt rather than broken, and do not let a
 description of them creep back into the docs; that is how the README came to
 advertise a 600ms latency it had never measured.

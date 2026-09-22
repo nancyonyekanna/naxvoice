@@ -38,7 +38,7 @@ The Silero VAD model is compiled into the binary with `include_bytes!` in
 `src-tauri/Cargo.toml` depends on `espeak-rs`, which compiles eSpeak NG's
 vendored C source. **A compiled naxvoice binary therefore links GPL-3.0-or-later
 code.** Building it for yourself is unencumbered, but if you distribute a built
-binary — a release, a `.app`, a package — you are distributing a combined work
+binary (a release, a `.app`, a package), you are distributing a combined work
 that carries GPL-3.0-or-later obligations, including offering corresponding
 source under those terms.
 

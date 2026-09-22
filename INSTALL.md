@@ -1,7 +1,7 @@
 # Installing naxvoice
 
 macOS only. Windows is partly written but the dictation key is not implemented
-there — see `platform/win32.rs`.
+there. See `platform/win32.rs`.
 
 ## The short way
 
@@ -12,7 +12,7 @@ cd naxvoice
 ```
 
 It checks what you need, downloads the speech model, builds, signs and installs
-to `/Applications`. Re-running it is safe — every step skips work already done.
+to `/Applications`. Re-running it is safe: every step skips work already done.
 
 Then grant two permissions, which no script can do for you. Jump to
 [Permissions](#permissions).
@@ -36,7 +36,7 @@ script with an error that does not mention cmake.
 
 ### 2. The speech model
 
-Not committed — 88MB is too large for a repo. Read-aloud reports the missing
+Not committed: 88MB is too large for a repo. Read-aloud reports the missing
 path rather than failing obscurely, but it will not speak without these.
 
 ```bash
@@ -46,7 +46,7 @@ curl -fL -o src-tauri/assets/kokoro-v1.0.quantized.onnx "$HF/onnx/model_quantize
 curl -fL -o src-tauri/assets/af_heart.bin               "$HF/voices/af_heart.bin"
 ```
 
-The Silero voice-activity model *is* committed — it is 1.3MB and the build
+The Silero voice-activity model *is* committed: it is 1.3MB and the build
 fails without it.
 
 ### 3. Configuration
@@ -85,9 +85,9 @@ Only re-sign if the verify above actually complains.
 
 naxvoice needs two, and they are **separate grants**:
 
-- **Input Monitoring** — whether the dictation key fires at all. Without it
+- **Input Monitoring**: whether the dictation key fires at all. Without it
   nothing is recorded and the app looks dead.
-- **Accessibility** — whether text can be pasted. Without it the dictation
+- **Accessibility**: whether text can be pasted. Without it the dictation
   records, transcribes and polishes, then nothing appears.
 
 Open the app first so it appears in the lists:
@@ -97,7 +97,7 @@ open /Applications/naxvoice.app
 ```
 
 Then System Settings → Privacy & Security → add **naxvoice** to both lists.
-**Quit it from the menu bar icon and reopen it** — both are only read at launch.
+**Quit it from the menu bar icon and reopen it**: both are only read at launch.
 
 **Launch from Finder, not a terminal.** macOS attributes permissions to the
 process that started the app, so launching from a terminal asks about your
@@ -105,7 +105,7 @@ terminal rather than about naxvoice.
 
 ## Using it
 
-There is no Dock icon and no window at startup — naxvoice runs from the menu
+There is no Dock icon and no window at startup: naxvoice runs from the menu
 bar, at the top right of the screen near the clock. That is deliberate: a Dock
 app steals focus when it shows a window, which would lose the cursor position
 the dictation is meant to paste into.
@@ -127,10 +127,13 @@ macOS ties grants to the binary's code signature and `tauri dev` re-signs
 ad-hoc on every rebuild, so the grant stops applying while the entry still sits
 in the list looking enabled. Install the bundled app for real use.
 
-**Read-aloud pauses between sentences.** Not a fault. Synthesis runs about 1.4×
-slower than speech, so playback catches up and waits at sentence boundaries.
-CoreML, quantisation tiers and thread counts were all measured and none helped;
-see the note at the top of `tts/kokoro.rs`.
+**Read-aloud pauses between sentences.** The cause is unresolved. Synthesis
+runs at about 585ms per spoken second, roughly 1.7x faster than real time, so
+the queue should not run dry on the engine's account. Earlier versions of this
+file said it ran 1.4x slower than speech; that figure came from a loaded machine
+and does not reproduce. Machine load is the leading suspect: the same
+measurement on a Mac deep into swap came back twenty to forty times worse. See
+the note at the top of `tts/kokoro.rs`.
 
 **Gatekeeper refuses to open it.** The app is ad-hoc signed, not notarised.
 Right-click → Open, once.

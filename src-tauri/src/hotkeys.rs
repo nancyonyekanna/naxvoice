@@ -115,7 +115,7 @@ fn handle_edge<R: Runtime>(app: &AppHandle<R>, edge: KeyEdge) -> Result<()> {
                 .send(SessionEvent::Segment(chunks))
                 .map_err(|_| anyhow::anyhow!("session ended before the resume"))?;
 
-            tracing::info!(id, "latched — keep talking, tap again to stop");
+            tracing::info!(id, "latched, keep talking and tap again to stop");
             crate::overlay::show(app, crate::overlay::Status::Listening);
             *state = State::Recording { id, latched: true, events };
         }

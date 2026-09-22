@@ -83,7 +83,7 @@ export default function Hotkeys() {
         {config.hotkeys.read_aloud_key === config.hotkeys.dictate_key ? (
           <div className="row">
             <span className="meta">
-              This is the same key as dictation. One key cannot do both — pick a
+              This is the same key as dictation. One key cannot do both, so pick a
               different one.
             </span>
           </div>

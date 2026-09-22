@@ -27,7 +27,7 @@ Single-level, no nesting, no collapse. Seven items fit without scrolling.
 
 Landing screen. Answers "is it working and what is it costing me."
 
-**Header** — app name, machine name, and one status pill: ready / degraded / offline.
+**Header**: app name, machine name, and one status pill: ready / degraded / offline.
 
 **Three metric tiles**
 - Round trip, median, in ms. The number that matters. (Built over a 24-hour
@@ -36,10 +36,10 @@ Landing screen. Answers "is it working and what is it costing me."
 - Words today, with dictation count underneath.
 - Spend this month, pulled from OpenRouter.
 
-**Engine list** — four rows, each a status dot, a name, and a right-aligned state.
-- Transcription · model name — cloud, last latency
-- Cleanup · model name — cloud, last latency
-- Kokoro — local, loaded / loading
+**Engine list**: four rows, each a status dot, a name, and a right-aligned state.
+- Transcription · model name, cloud, last latency
+- Cleanup · model name, cloud, last latency
+- Kokoro, local, loaded / loading
 (No second engine. Chatterbox-Turbo was measured at ~2.1s of compute per spoken
 second and dropped; see CLAUDE.md step 7.)
 
@@ -50,21 +50,21 @@ the state text carries the same information.
 
 ## 02 Models and routing
 
-**OpenRouter key** — password field, with remaining credit shown beside it once
+**OpenRouter key**: password field, with remaining credit shown beside it once
 validated. Stored in the OS keychain, never written to config.
 
-**Transcription model** — select. Label each option with its trade-off, not just
+**Transcription model**: select. Label each option with its trade-off, not just
 its name: "deepgram/nova-3 · fastest", "openai/whisper-large-v3 · most accurate".
 
-**Cleanup model** — select.
+**Cleanup model**: select.
 
-**If offline** — select: paste raw transcript / queue until reconnect.
+**If offline**: a select offering paste raw transcript, or queue until reconnect.
 
 **Chunking** section, below a divider. These three controls decide whether the
 tool feels fast or feels broken, so they are exposed rather than buried.
 - Pause threshold, slider, 200-1200ms, default 450
 - Chunk overlap, slider, 0-500ms, default 200
-- ~~Audio, select: Opus 24kbps (recommended) / WAV 16kHz~~ — not built. Capture
+- ~~Audio, select: Opus 24kbps (recommended) / WAV 16kHz~~: not built. Capture
   writes 16kHz mono WAV and there is nothing to choose between, so the control
   would be a lie. `AudioFormat::Opus` is reserved for when chunk payload size
   starts to matter.
@@ -78,7 +78,7 @@ mid-thought.
 
 Two-pane. List on the left, editor on the right.
 
-**List** — profile name with the matched app identifier underneath in smaller
+**List**: profile name with the matched app identifier underneath in smaller
 muted text. Default sits at the bottom, visually separated.
 
 **Editor**
@@ -93,10 +93,10 @@ muted text. Default sits at the bottom, visually separated.
 
 ## 04 Dictionary
 
-**Add row** — two inputs side by side: term, and "sounds like" (optional), then
+**Add row**: two inputs side by side: term, and "sounds like" (optional), then
 an Add button.
 
-**Table** — term in monospace on the left; recorded mishearings and a correction
+**Table**: term in monospace on the left; recorded mishearings and a correction
 count on the right, muted.
 
 The correction count is not decoration. It decides which terms make the top-40
@@ -109,11 +109,11 @@ by the cleanup model.
 
 ## 05 Voice and read-aloud
 
-- First sentence — engine and voice select, with a play button to preview
-- Main voice — engine and voice select, with a play button
-- Clone source — a file row showing the current sample with a Re-record button
-- Speed — slider 0.5-2.0, default 1.2
-- Expression — not shown. It was a Chatterbox-only control, and Chatterbox is
+- First sentence, engine and voice select, with a play button to preview
+- Main voice, engine and voice select, with a play button
+- Clone source, a file row showing the current sample with a Re-record button
+- Speed, slider 0.5-2.0, default 1.2
+- Expression, not shown. It was a Chatterbox-only control, and Chatterbox is
   not used; Kokoro ignores the setting.
 
 **Pronunciation rules**, below a divider. Rules render as removable chips in
@@ -121,7 +121,7 @@ monospace, `from → to`. Three checkboxes: skip code blocks, skip URLs,
 expand numbers.
 
 There is no handoff to tune: read-aloud uses one voice throughout. The clone
-source row is dead until an engine that can clone is fast enough to use — see
+source row is dead until an engine that can clone is fast enough to use. See
 CLAUDE.md step 7 for the measurements that ruled Chatterbox out.
 
 ---
@@ -132,15 +132,15 @@ This screen had no design. It was named in the sidebar and in README and
 described nowhere, so what follows is what was built rather than what was
 originally intended.
 
-**Keep dictations** — a checkbox, on by default. It writes what you dictate to
+**Keep dictations**: a checkbox, on by default. It writes what you dictate to
 disk in plain text, so it is stated plainly and can be turned off. Turning it
 off stops new records; it does not delete old ones.
 
-**List** — newest first: timestamp, the app the text went to, round trip in ms,
+**List**: newest first: timestamp, the app the text went to, round trip in ms,
 and the chunk count in muted text, then the pasted result. Where cleanup changed
 the text, the raw transcript follows in monospace, so the two can be compared.
 
-**Delete everything recorded** — one button, no per-row delete. Reaching for
+**Delete everything recorded**: one button, no per-row delete. Reaching for
 this means wanting the record gone, not curated.
 
 The same store answers Status's round trip and word count. That is why it earns
@@ -157,17 +157,17 @@ The wireframe frame for this screen is out of date: it shows Cmd+Shift+Space and
 a separate "dictate raw" key, which is the design replaced by a single key you
 hold, or double-tap to latch. Build from the code.
 
-**Dictate** — a select, offering only Right Command and Left Command. Those are
+**Dictate**: a select, offering only Right Command and Left Command. Those are
 the only keycodes verified against a real table, and a wrong one produces a key
 that silently never fires, so the list is short on purpose and the screen says
 why.
 
-**Latch window** — a slider. How long after release a second tap still counts as
+**Latch window**: a slider. How long after release a second tap still counts as
 resuming rather than starting again.
 
-**Read selection aloud** — an ordinary accelerator, editable as text.
+**Read selection aloud**: an ordinary accelerator, editable as text.
 
-**Stop** — shown, but not bindable. Registering Escape globally would swallow it
+**Stop**: shown, but not bindable. Registering Escape globally would swallow it
 from every other application; pressing the read-aloud key again stops instead.
 
 Below these, the two macOS permissions, because a missing one is the likeliest
@@ -181,12 +181,12 @@ key fire, Accessibility lets the paste land. They are separate grants.
 Not part of the dashboard window. A borderless always-on-top widget near the
 cursor, roughly 200x40. Three states:
 
-- **Listening** — mic icon, elapsed time, chunk count sent
-- **Polishing** — spinner, no time estimate (an estimate that is wrong is worse
+- **Listening**: mic icon, elapsed time, chunk count sent
+- **Polishing**: spinner, no time estimate (an estimate that is wrong is worse
   than none)
-- **Reading** — speaker icon, time remaining, Stop button
+- **Reading**: speaker icon, time remaining, Stop button
 
-Dismissable with Escape in every state. Never steals focus — if it takes focus
+Dismissable with Escape in every state. Never steals focus: if it takes focus
 the paste target is lost and the whole interaction fails.
 
 This is the surface the user actually lives in. Polish it before the dashboard.

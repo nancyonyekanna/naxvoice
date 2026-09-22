@@ -27,7 +27,7 @@ export default function Voice() {
         <div className="row">
           <span>Engine</span>
           <span className="meta">
-            Kokoro — the only one implemented
+            Kokoro, the only one implemented
           </span>
         </div>
         <div className="row">
