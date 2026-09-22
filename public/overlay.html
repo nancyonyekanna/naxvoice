@@ -139,6 +139,34 @@
         return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
       };
 
+      // Mirrors MAX_WIDTH in overlay.rs. Past this the widget stops growing and
+      // says less instead.
+      const MAX_WIDTH = 320;
+
+      // What the row needs to show everything without clipping.
+      //
+      // Measured rather than estimated: Rust knows the state and the chunk
+      // count but not the font metrics, and the old fixed 200px window cut
+      // "2 chunks sent" into "2 chunks sen". scrollWidth is used because a
+      // squeezed flex item reports a smaller offsetWidth than its own text.
+      function naturalWidth() {
+        const style = getComputedStyle(hud);
+        const padding =
+          parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+        const gap = parseFloat(style.gap) || 0;
+
+        const parts = [dot];
+        if (label.textContent) parts.push(label);
+        if (meta.textContent) parts.push(meta);
+        if (!stop.hidden) parts.push(stop);
+
+        const content = parts.reduce(
+          (sum, el) => sum + Math.ceil(el.scrollWidth || el.offsetWidth),
+          0,
+        );
+        return Math.ceil(padding + content + gap * Math.max(0, parts.length - 1));
+      }
+
       function render() {
         hud.dataset.state = state ?? "";
         stop.hidden = state !== "reading";
@@ -164,19 +192,29 @@
           meta.textContent = "";
         }
 
-        // Reported back so Rust can log what was actually drawn. The widget
-        // spends most of its life parked off-screen, and screenshotting it
-        // needs a permission the machine may not have granted — this is the
-        // only evidence that the page loaded, the event arrived, and the right
-        // words came out of it.
+        // Drop the chunk count rather than clip a word. The count is the least
+        // important thing on the row: the state and the clock are why anyone
+        // looks at it, and half a word reads as a bug.
+        let width = naturalWidth();
+        if (width > MAX_WIDTH && meta.textContent) {
+          meta.textContent = "";
+          width = naturalWidth();
+        }
+
+        // Reported back so Rust can log what was actually drawn, and size the
+        // window to fit it. The widget spends most of its life parked
+        // off-screen, and screenshotting it needs a permission the machine may
+        // not have granted, so this is the only evidence that the page loaded,
+        // the event arrived, and the right words came out of it.
         //
-        // Only when that text changes, though. render() runs five times a
-        // second to move the clock, and reporting every tick would put back
-        // exactly the IPC traffic that ticking locally exists to avoid.
+        // Only when that changes, though. render() runs five times a second to
+        // move the clock, and reporting every tick would put back exactly the
+        // IPC traffic that ticking locally exists to avoid.
         const drawn = JSON.stringify({
           state,
           label: label.textContent,
           meta: meta.textContent,
+          width,
         });
         if (drawn !== lastDrawn) {
           lastDrawn = drawn;

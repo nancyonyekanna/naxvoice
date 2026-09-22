@@ -33,7 +33,16 @@ pub const LABEL: &str = "overlay";
 
 /// Roughly 200x40, per DESIGN.md. Logical pixels, so it keeps its size on a
 /// Retina display rather than rendering at half the intended size.
+///
+/// `WIDTH` is the starting and minimum width; the widget grows to fit its own
+/// text up to `MAX_WIDTH`. At a fixed 200 the listening state did not fit:
+/// "Listening · 0:05" beside "2 chunks sent" needs roughly 174px of text
+/// against about 152px of room once the padding, the dot and the two gaps are
+/// taken out, and `overflow: hidden` clipped the right-hand end into
+/// "2 chunks sen". Past `MAX_WIDTH` the page drops the chunk count instead,
+/// because a widget that keeps growing is worse than one that says less.
 const WIDTH: f64 = 200.0;
+const MAX_WIDTH: f64 = 320.0;
 const HEIGHT: f64 = 40.0;
 
 /// Enough clearance that the widget sits beside the pointer rather than under
@@ -104,11 +113,53 @@ pub fn create<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
     // off-screen and screenshots need a permission that may not be granted,
     // this is the only evidence that it loaded, received the event, and
     // rendered the right text.
-    window.listen("overlay:rendered", |event| {
+    // The page also reports how wide its content actually is, which is the only
+    // way to know: Rust has the state and the chunk count, but not the font
+    // metrics that decide whether they fit.
+    let sizing = window.clone();
+    window.listen("overlay:rendered", move |event| {
         tracing::debug!(drew = event.payload(), "overlay rendered");
+        if let Some(width) = reported_width(event.payload()) {
+            fit_to(&sizing, width);
+        }
     });
 
     Ok(())
+}
+
+/// The `width` the page measured for its own content, if it sent one.
+fn reported_width(payload: &str) -> Option<f64> {
+    serde_json::from_str::<serde_json::Value>(payload)
+        .ok()?
+        .get("width")?
+        .as_f64()
+}
+
+/// Grows or shrinks the widget to fit the text the page just drew.
+///
+/// Skipped when the width has not meaningfully changed. `render()` runs five
+/// times a second to move the clock, and resizing on every tick would make the
+/// widget shimmer while the user is trying to read it.
+///
+/// If the widget ever stays clipped despite this, check that `set_size` is
+/// honoured on a window built `resizable(false)`: on macOS that style mask
+/// governs user dragging rather than programmatic sizing, but it is the first
+/// thing to rule out.
+fn fit_to<R: Runtime>(window: &tauri::WebviewWindow<R>, want: f64) {
+    let width = want.clamp(WIDTH, MAX_WIDTH);
+    if logical_width(window).is_some_and(|current| (current - width).abs() < 1.0) {
+        return;
+    }
+    if let Err(e) = window.set_size(LogicalSize::new(width, HEIGHT)) {
+        tracing::debug!(error = %e, want = width, "overlay could not be resized");
+    }
+}
+
+/// The widget's current width in logical pixels.
+fn logical_width<R: Runtime>(window: &tauri::WebviewWindow<R>) -> Option<f64> {
+    let scale = window.scale_factor().ok()?;
+    let size: LogicalSize<f64> = window.inner_size().ok()?.to_logical(scale);
+    Some(size.width)
 }
 
 /// Shows the widget in `status`, moved to wherever the pointer is now.
@@ -156,6 +207,11 @@ fn place<R: Runtime>(
     window: &tauri::WebviewWindow<R>,
     cursor: LogicalPosition<f64>,
 ) -> LogicalPosition<f64> {
+    // The widget grows to fit its text, so the edge flip has to use the width
+    // it actually has. Using the constant would hang a widened widget off the
+    // right-hand side of the screen, which is the bug this flip exists to stop.
+    let width = logical_width(window).unwrap_or(WIDTH);
+
     let mut x = cursor.x + CURSOR_GAP;
     let mut y = cursor.y + CURSOR_GAP;
 
@@ -164,8 +220,8 @@ fn place<R: Runtime>(
         let size: LogicalSize<f64> = monitor.size().to_logical(scale);
         let origin: LogicalPosition<f64> = monitor.position().to_logical(scale);
 
-        if x + WIDTH > origin.x + size.width {
-            x = cursor.x - WIDTH - CURSOR_GAP;
+        if x + width > origin.x + size.width {
+            x = cursor.x - width - CURSOR_GAP;
         }
         if y + HEIGHT > origin.y + size.height {
             y = cursor.y - HEIGHT - CURSOR_GAP;
@@ -323,5 +379,28 @@ mod tests {
         for key in ["state", "chunks", "total_ms", "restart"] {
             assert!(json.contains(key), "{key} is missing from {json}");
         }
+    }
+
+    /// The width the page measures is what stops the text being clipped, so a
+    /// payload that stops carrying it must not be read as zero.
+    #[test]
+    fn a_reported_width_is_read_from_the_payload() {
+        let payload = r#"{"state":"listening","label":"Listening · 0:05","meta":"2 chunks sent","width":247}"#;
+        assert_eq!(reported_width(payload), Some(247.0));
+    }
+
+    #[test]
+    fn a_payload_without_a_width_reports_none_rather_than_zero() {
+        assert_eq!(reported_width(r#"{"state":"polishing"}"#), None);
+        assert_eq!(reported_width("not json at all"), None);
+    }
+
+    /// The clamp is what keeps a long chunk count from growing the widget
+    /// across the screen, and a short one from shrinking it to nothing.
+    #[test]
+    fn the_width_clamp_holds_both_ends() {
+        assert_eq!(40.0f64.clamp(WIDTH, MAX_WIDTH), WIDTH);
+        assert_eq!(900.0f64.clamp(WIDTH, MAX_WIDTH), MAX_WIDTH);
+        assert_eq!(247.0f64.clamp(WIDTH, MAX_WIDTH), 247.0);
     }
 }

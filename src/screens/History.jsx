@@ -6,6 +6,10 @@ const invoke = (...args) => window.__TAURI__?.core?.invoke(...args);
 export default function History() {
   const { config, note, setNote, edit, save } = useConfig();
   const [records, setRecords] = useState(null);
+  // Which destructive action is armed, if any. A two-step button rather than a
+  // dialog: both of these delete something permanently, and the first click
+  // should not be the last word.
+  const [arming, setArming] = useState(null);
 
   const load = () => {
     invoke("history_recent", { limit: 100 })
@@ -16,10 +20,24 @@ export default function History() {
   useEffect(load, []);
 
   const clear = async () => {
+    setArming(null);
     try {
       await invoke("clear_history");
       setRecords([]);
-      setNote("History cleared.");
+      setNote("History cleared. Your spending record is untouched.");
+    } catch (e) {
+      setNote(String(e));
+    }
+  };
+
+  // Deliberately separate from clearing history. What you said and what you
+  // paid are different records in different files, and one button doing both
+  // would destroy one the user meant to keep.
+  const clearSpend = async () => {
+    setArming(null);
+    try {
+      await invoke("clear_spend");
+      setNote("Spending record cleared. Your dictation history is untouched.");
     } catch (e) {
       setNote(String(e));
     }
@@ -57,9 +75,24 @@ export default function History() {
         <button onClick={save} disabled={!config}>
           Save settings
         </button>{" "}
-        <button onClick={clear} disabled={!records?.length}>
-          Delete everything recorded
+        <button
+          onClick={() => (arming === "history" ? clear() : setArming("history"))}
+          disabled={!records?.length}
+        >
+          {arming === "history"
+            ? "Click again to delete everything"
+            : "Delete everything recorded"}
+        </button>{" "}
+        <button onClick={() => (arming === "spend" ? clearSpend() : setArming("spend"))}>
+          {arming === "spend"
+            ? "Click again to clear spending"
+            : "Clear spending record"}
         </button>
+      </p>
+      <p className="hint">
+        These are two separate records. Deleting your dictations leaves the
+        spending total intact, and clearing the spending total leaves your
+        dictations intact.
       </p>
 
       {records === null ? (

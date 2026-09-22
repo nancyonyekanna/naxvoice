@@ -29,6 +29,14 @@ const COMPACT_OVER_BYTES: u64 = 2 * 1024 * 1024;
 
 const DAY_SECONDS: u64 = 24 * 60 * 60;
 
+/// How many recent dictations the round-trip figures cover.
+///
+/// A time window is the wrong shape for this one. During development a morning
+/// of slow runs drags a 24-hour median all day, so the screen keeps reporting a
+/// build that no longer exists. A fixed count of the most recent dictations
+/// tracks what the app is doing now, and recovers within an afternoon.
+const ROUND_TRIP_SAMPLE: usize = 50;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Record {
     /// Unix seconds. Stored as a number rather than a formatted date so it can
@@ -47,15 +55,28 @@ pub struct Record {
 
 /// Aggregates for the Status screen.
 ///
-/// The window is the last 24 hours rather than "today", and the screen says so.
+/// Two different windows, deliberately. Words and dictations cover the last 24
+/// hours, because "how much did I dictate today" is a question about time.
 /// Calling a rolling window "today" would need a timezone, and a figure that
 /// quietly means something other than its label is worse than a longer label.
+///
+/// Round trip covers the last `ROUND_TRIP_SAMPLE` dictations instead, because
+/// "how fast is it" is a question about the current build rather than about
+/// time.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Stats {
+    /// Last 24 hours.
     pub dictations: u64,
+    /// Last 24 hours.
     pub words: u64,
     /// Median rather than mean: one slow outlier should not move it.
     pub median_ms: Option<u64>,
+    /// The tail, shown beside the median. A median on its own hides the
+    /// dictation that took five seconds, and that is the one the user remembers.
+    pub p95_ms: Option<u64>,
+    /// How many dictations the round-trip figures actually cover, so the screen
+    /// can say "last 12" rather than claim a 50 it does not have.
+    pub round_trip_sample: u64,
 }
 
 /// Overrides where history is kept. Mirrors `NAXVOICE_CONFIG`, and exists for
@@ -177,19 +198,44 @@ pub fn clear() -> Result<()> {
 
 pub fn stats() -> Stats {
     let Ok(path) = path() else { return Stats::default() };
-    let cutoff = now().saturating_sub(DAY_SECONDS);
-    let recent: Vec<Record> = read_all(&path).into_iter().filter(|r| r.at >= cutoff).collect();
+    let all = read_all(&path);
 
-    let words = recent
+    // Records are appended, so the file is already in chronological order and
+    // the tail is the most recent run of dictations.
+    let cutoff = now().saturating_sub(DAY_SECONDS);
+    let day: Vec<&Record> = all.iter().filter(|r| r.at >= cutoff).collect();
+
+    let words = day
         .iter()
         .map(|r| r.text.split_whitespace().count() as u64)
         .sum();
 
+    let recent = &all[all.len().saturating_sub(ROUND_TRIP_SAMPLE)..];
+    let latencies: Vec<u64> = recent.iter().map(|r| r.ms).collect();
+
     Stats {
-        dictations: recent.len() as u64,
+        dictations: day.len() as u64,
         words,
-        median_ms: median(recent.iter().map(|r| r.ms).collect()),
+        median_ms: median(latencies.clone()),
+        p95_ms: percentile(latencies, 95),
+        round_trip_sample: recent.len() as u64,
     }
+}
+
+/// Nearest-rank percentile.
+///
+/// No interpolation: with a handful of samples an interpolated p95 invents a
+/// number that never happened, and every value here is a dictation that really
+/// took that long. Below roughly twenty samples the p95 is simply the worst or
+/// second-worst run, which is why the screen never shows it alone.
+fn percentile(mut values: Vec<u64>, p: usize) -> Option<u64> {
+    if values.is_empty() {
+        return None;
+    }
+    values.sort_unstable();
+    // Ceiling division without div_ceil, which would raise the MSRV.
+    let rank = ((p * values.len()) + 99) / 100;
+    Some(values[rank.max(1) - 1])
 }
 
 fn median(mut values: Vec<u64>) -> Option<u64> {
@@ -229,6 +275,53 @@ mod tests {
     #[test]
     fn an_outlier_does_not_drag_the_median() {
         assert_eq!(median(vec![600, 620, 610, 90_000]), Some(615));
+    }
+
+    /// The p95 exists precisely to show the outlier the median hides.
+    #[test]
+    fn the_p95_surfaces_what_the_median_hides() {
+        let runs = vec![600, 620, 610, 90_000];
+        assert_eq!(median(runs.clone()), Some(615));
+        assert_eq!(percentile(runs, 95), Some(90_000));
+    }
+
+    #[test]
+    fn percentile_of_nothing_is_absent_rather_than_zero() {
+        assert_eq!(percentile(vec![], 95), None);
+    }
+
+    /// Nearest rank, never interpolated: every figure shown was a real run.
+    #[test]
+    fn percentile_returns_a_value_that_actually_occurred() {
+        let runs: Vec<u64> = (1..=100).collect();
+        let p95 = percentile(runs.clone(), 95).unwrap();
+        assert_eq!(p95, 95);
+        assert!(runs.contains(&p95));
+    }
+
+    /// Round trip is the last N dictations, not a time window, so an old slow
+    /// build stops being reported as soon as N newer runs exist.
+    #[test]
+    fn the_round_trip_window_is_the_most_recent_dictations() {
+        let mut all: Vec<Record> = Vec::new();
+        // Fifty slow ones, then fifty fast ones.
+        for i in 0..100u64 {
+            all.push(Record {
+                at: 1000 + i,
+                app: "com.example".into(),
+                raw: "x".into(),
+                text: "x".into(),
+                ms: if i < 50 { 9_000 } else { 500 },
+                chunks: 1,
+            });
+        }
+        let recent = &all[all.len().saturating_sub(ROUND_TRIP_SAMPLE)..];
+        assert_eq!(recent.len(), 50);
+        assert_eq!(
+            median(recent.iter().map(|r| r.ms).collect()),
+            Some(500),
+            "the slow build should have fallen out of the window"
+        );
     }
 
     /// The store end to end, on a real file.

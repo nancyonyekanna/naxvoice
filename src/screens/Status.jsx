@@ -48,16 +48,12 @@ export default function Status() {
             alone made it read as though long dictations were slow. */}
         <Tile
           k="Round trip"
-          v={snapshot.round_trip_ms ? `${snapshot.round_trip_ms}ms` : "—"}
-          s={
-            snapshot.round_trip_ms
-              ? "median from release to text · mostly fixed, not per word"
-              : "nothing recorded yet"
-          }
+          v={snapshot.round_trip_ms ? `${snapshot.round_trip_ms}ms` : "none yet"}
+          s={roundTripNote(snapshot)}
         />
         <Tile
           k="Words spoken"
-          v={snapshot.words_today ?? "—"}
+          v={snapshot.words_today ?? "none yet"}
           s={
             snapshot.dictations_today != null
               ? `${snapshot.dictations_today} dictations, last 24 hours`
@@ -104,6 +100,21 @@ function Head({ state }) {
       <span className="pill">{state}</span>
     </div>
   );
+}
+
+// Counted over the last N dictations rather than a time window: a 24-hour
+// median keeps reporting an older, slower build all day. N is stated rather
+// than assumed, because claiming "last 50" when twelve exist is a small lie
+// that makes the number look steadier than it is.
+//
+// The p95 rides alongside because a median on its own hides the one dictation
+// that took five seconds, and that is the one the user actually remembers.
+function roundTripNote(snapshot) {
+  if (!snapshot.round_trip_ms) return "nothing recorded yet";
+  const n = snapshot.round_trip_sample;
+  const window = `median, last ${n} dictation${n === 1 ? "" : "s"}`;
+  const p95 = snapshot.round_trip_p95_ms;
+  return p95 && p95 !== snapshot.round_trip_ms ? `${window} · p95 ${p95}ms` : window;
 }
 
 // One dictation costs a fraction of a cent, so a flat two decimal places would

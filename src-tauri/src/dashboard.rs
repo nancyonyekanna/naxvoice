@@ -40,6 +40,12 @@ pub struct Engine {
 pub struct Snapshot {
     state: &'static str,
     round_trip_ms: Option<u64>,
+    /// The tail beside the median. A median alone hides the slow dictation,
+    /// which is the one the user remembers.
+    round_trip_p95_ms: Option<u64>,
+    /// How many dictations those two figures cover, so the screen can say
+    /// "last 12" instead of claiming a 50 it does not have.
+    round_trip_sample: u64,
     words_today: Option<u64>,
     dictations_today: Option<u64>,
     spend: crate::spend::Totals,
@@ -242,6 +248,8 @@ pub fn status_snapshot(app: AppHandle) -> Snapshot {
     Snapshot {
         state,
         round_trip_ms: stats.median_ms,
+        round_trip_p95_ms: stats.p95_ms,
+        round_trip_sample: stats.round_trip_sample,
         words_today: (stats.dictations > 0).then_some(stats.words),
         dictations_today: (stats.dictations > 0).then_some(stats.dictations),
         // Not gated on history.keep: the ledger is a separate file, so a user
