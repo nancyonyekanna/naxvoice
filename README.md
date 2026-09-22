@@ -1,16 +1,35 @@
 # naxvoice
 
-System-wide dictation and read-aloud. Hold a key and speak, polished text lands at
-your cursor. Select any text, press a key, hear it read back in a voice you chose.
+**Talk instead of type. Listen instead of read. One app for both, on your Mac.**
 
-**macOS only, today.** Windows is designed for and partly written (the clipboard,
-paste and foreground-window code are all there), but the dictation key itself is
-not: watching a bare modifier needs a low-level keyboard hook, and
-`platform/win32.rs` says so with an explicit `bail!` rather than failing quietly.
-Until that lands, the key will never fire on Windows. Help welcome.
+**Dictation that knows where you are.** Hold a key and speak. naxvoice transcribes you, strips the ums and false starts, and pastes finished text at your cursor. It formats for the app you're in: code stays code in VS Code, emails get paragraphs, WhatsApp stays casual. You write the rule for each app.
 
-Transcription and cleanup run through OpenRouter on one API key. Speech synthesis
-runs locally, so reading is unlimited and works offline.
+**It learns your words.** Add the names and terms it keeps getting wrong, including how it mishears them, and it gets them right from then on.
+
+**Read-aloud for anything you can select.** Highlight text in any app, press a key, hear it. The voice runs on your Mac, so there's no character limit, no subscription, and it works offline.
+
+**No plan to buy.** Dictation runs on your own OpenRouter key, so you pay for what you use with no markup. The key lives in the macOS keychain.
+
+Open source. macOS today, Windows in progress.
+
+![naxvoice dictating into TextEdit](docs/naxvoice-dictation-demo.gif)
+
+Dictation into TextEdit, at real speed. The recording has no sound.
+
+## Download
+
+**[Latest release](https://github.com/nancyonyekanna/naxvoice/releases/latest)**
+
+macOS will block it the first time, because the app is signed but not notarised.
+Open System Settings, go to Privacy and Security, scroll to the message about
+naxvoice, and click Open Anyway.
+
+## Requirements
+
+- An Apple Silicon Mac running macOS 11 or later. The build is `aarch64` only.
+- An OpenRouter API key, for transcription and cleanup. Read-aloud needs neither
+  a key nor a network.
+- Nothing else. The speech model and the voice ship inside the app.
 
 ## What it looks like
 
@@ -92,6 +111,7 @@ src-tauri/            Rust core
     hotkeys.rs        Key watching, and the dictation session it drives
     overlay.rs        Floating status widget, parked off-screen when idle
     history.rs        What was dictated, as JSONL on disk
+    spend.rs          What naxvoice itself has cost, kept apart from history
     dashboard.rs      The settings window and its Tauri commands
     audio/
       recorder.rs     Mic capture, split into chunks at natural pauses
@@ -113,7 +133,7 @@ src-tauri/            Rust core
       win32.rs        SendInput paste, clipboard, foreground window
 
 src/                  React dashboard
-  screens/            Status, Models, Profiles, Dictionary, Voice, History, Hotkeys
+  screens/            Setup, Status, Models, Profiles, Dictionary, Voice, History, Hotkeys
   lib/                Shared config hook over the Tauri commands
 ```
 
@@ -122,6 +142,18 @@ Audio is captured and uploaded as 16kHz mono WAV. `AudioFormat::Opus` exists in
 nothing writes it today.
 
 ## Install
+
+### Download the app
+
+Take the disk image from the [latest release](https://github.com/nancyonyekanna/naxvoice/releases/latest),
+drag naxvoice to Applications, and open it. macOS blocks it the first time, so
+allow it in System Settings under Privacy and Security, then follow the setup
+screen inside the app.
+
+**Apple Silicon only.** No Intel or universal build has been produced or tested,
+so this says nothing about whether one would work.
+
+### Build from source
 
 ```bash
 git clone https://github.com/nancyonyekanna/naxvoice.git
@@ -132,12 +164,6 @@ cd naxvoice
 Checks what you need, downloads the speech model, builds, signs and installs to
 `/Applications`. Safe to re-run. Then grant two permissions, which no script can
 do for you.
-
-**Apple Silicon only.** The build and the disk image are `aarch64`. No Intel or
-universal build has been produced or tested, so this says nothing about whether
-one would work. The app is ad-hoc signed and not notarised, so macOS will refuse
-it the first time and you have to allow it explicitly in System Settings under
-Privacy and Security.
 
 **[INSTALL.md](INSTALL.md)** has the manual steps, what each permission is for,
 and what to do when something does not work.
@@ -184,13 +210,15 @@ something working end to end before making it fast.
 macOS needs two permissions, and they are **separate grants**: Input Monitoring
 decides whether the dictation key fires at all, Accessibility decides whether the
 text can be pasted. Neither is prompted for, you add naxvoice to both lists by
-hand, and both are only read at launch. INSTALL.md says where, and what each
-failure looks like.
+hand, and both are only read at launch. The setup screen inside the app walks you
+through both, and INSTALL.md says what each failure looks like.
 
 Windows needs no special permission, but the dictation key is not implemented
-there yet. Some Windows apps also reject synthetic Ctrl+V; a character-by-character
-`SendInput` fallback is noted in `platform/win32.rs` as the place it would go, and
-is not written.
+there yet: the clipboard, paste and foreground-window code are written, while
+watching a bare modifier needs a low-level keyboard hook, and
+`platform/win32.rs` says so with an explicit `bail!` rather than failing quietly.
+Some Windows apps also reject synthetic Ctrl+V; a character-by-character
+`SendInput` fallback is noted there as the place it would go, and is not written.
 
 ## License
 
